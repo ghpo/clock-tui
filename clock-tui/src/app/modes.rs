@@ -83,12 +83,20 @@ fn render_centered(
     footer: Option<String>,
 ) {
     let text_size = text.size();
-    let text_area = Rect {
+    let mut text_area = Rect {
         x: area.x + (area.width.saturating_sub(text_size.0)) / 2,
         y: area.y + (area.height.saturating_sub(text_size.1)) / 2,
         width: min(text_size.0, area.width),
         height: min(text_size.1, area.height),
     };
+
+    if header.is_some()
+        && area.top() + 2 == text_area.top()
+        && text_area.bottom() < area.bottom()
+    {
+        text_area.y += 1;
+    }
+
     text.clone().render(text_area, buf);
 
     let render_text_center = |text: &str, top: u16, buf: &mut Buffer| {
