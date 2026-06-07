@@ -16,8 +16,9 @@
 - `cargo xtask` regenerates shell completions and the `tclock.1` manpage into `assets/gen` using the clap `App` definition. Rerun it after changing CLI flags/subcommands if generated assets are part of the change.
 
 ## Release / packaging
-- `.github/workflows/release.yml` builds `tclock` release tarballs for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`, creates a GitHub Release on `v*` tags, and publishes `clock-tui` / `clock-tui-bin` to AUR when `AUR_SSH_KEY` is configured.
-- AUR templates live in `packaging/aur/PKGBUILD` and `packaging/aur/PKGBUILD-bin`; keep `pkgver` in sync with `clock-tui/Cargo.toml` and leave sha256 values as `SKIP` between releases because the release workflow pins them.
+- `.github/workflows/release.yml` builds `tclock` release tarballs for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`, creates a GitHub Release on `v*` tags, and publishes `clock-tui-bin` to AUR when `AUR_SSH_KEY` is configured.
+- The upstream `clock-tui` AUR source package is maintained by someone else; this fork publishes only `clock-tui-bin`.
+- The AUR template lives in `packaging/aur/PKGBUILD-bin`; keep `pkgver` in sync with `clock-tui/Cargo.toml` and leave sha256 values as `SKIP` between releases because the release workflow pins them.
 - `clock-tui/Cargo.toml` has cargo-binstall metadata pointing at GitHub Release tarballs; if artifact names change, update that metadata too.
 
 ## Runtime gotchas

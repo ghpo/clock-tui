@@ -31,8 +31,7 @@ $ cargo install clock-tui
 On Arch Linux, install from AUR:
 
 ```shell
-$ yay -S clock-tui-bin  # prebuilt binary
-$ yay -S clock-tui      # build from source
+$ yay -S clock-tui-bin  # prebuilt binary from this fork
 ```
 
 ## Basic usage
