@@ -14,7 +14,7 @@ fn build_shell_completion(outdir: &Path) -> Result<()> {
     let shells = Shell::value_variants();
 
     for shell in shells {
-        generate_to(*shell, &mut app, BIN_NAME, &outdir)?;
+        generate_to(*shell, &mut app, BIN_NAME, outdir)?;
     }
 
     Ok(())
@@ -35,7 +35,7 @@ fn main() -> Result<()> {
     let out_dir = env!("CARGO_MANIFEST_DIR");
 
     let out_path = PathBuf::from(out_dir).join("../assets/gen");
-    fs::create_dir_all(&out_path).unwrap();
+    fs::create_dir_all(&out_path)?;
 
     build_shell_completion(&out_path)?;
     build_manpages(&out_path)?;

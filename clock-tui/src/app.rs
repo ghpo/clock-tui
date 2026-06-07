@@ -1,6 +1,9 @@
+use std::sync::OnceLock;
+
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
+use chrono::LocalResult;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
@@ -27,7 +30,7 @@ pub mod modes;
 pub enum Mode {
     /// The clock mode displays the current time, the default mode.
     Clock {
-        /// Custome timezone, for example "America/New_York", use local timezone if not specificed
+        /// Custom timezone, for example "America/New_York"; uses the local timezone if not specified
         #[arg(short = 'z', long, value_parser = parse_timezone)]
         timezone: Option<Tz>,
         /// Do not show date
@@ -36,18 +39,18 @@ pub enum Mode {
         /// Do not show seconds
         #[arg(short = 'S', long, action)]
         no_seconds: bool,
-        /// Show milliseconds
+        /// Show fractional seconds
         #[arg(short, long, action)]
         millis: bool,
     },
     /// The timer mode displays the remaining time until the timer is finished.
     Timer {
         /// Initial duration for timer, value can be 10s for 10 seconds, 1m for 1 minute, etc.
-        /// Also accept mulitple duration value and run the timers sequentially, eg. 25m 5m
+        /// Also accepts multiple duration values and runs the timers sequentially, eg. 25m 5m
         #[arg(short, long = "duration", value_parser = parse_duration, num_args = 1.., default_value = "5m")]
         durations: Vec<Duration>,
 
-        /// Set the title for the timer, also accept mulitple titles for each durations correspondingly
+        /// Set the title for the timer; accepts multiple titles corresponding to each duration
         #[arg(short, long = "title", num_args = 0..)]
         titles: Vec<String>,
 
@@ -55,7 +58,7 @@ pub enum Mode {
         #[arg(long, short, action)]
         repeat: bool,
 
-        /// Hide milliseconds
+        /// Hide fractional seconds
         #[arg(long = "no-millis", short = 'M', action)]
         no_millis: bool,
 
@@ -83,7 +86,7 @@ pub enum Mode {
         #[arg(long, short = 'T')]
         title: Option<String>,
 
-        /// Continue to countdown after pass the target time
+        /// Continue counting down after passing the target time
         #[arg(long = "continue", short = 'c', action)]
         continue_on_zero: bool,
 
@@ -91,13 +94,17 @@ pub enum Mode {
         #[arg(long, short, action)]
         reverse: bool,
 
-        /// Show milliseconds
+        /// Show fractional seconds
         #[arg(short, long, action)]
         millis: bool,
     },
 }
 
-use crate::config::Config;
+use crate::config::{Config, TimerConfig};
+
+const DEFAULT_CLOCK_SIZE: u16 = 1;
+const DEFAULT_TIMER_WORK_MINUTES: i64 = 25;
+const DEFAULT_TIMER_BREAK_MINUTES: i64 = 5;
 
 #[derive(clap::Parser, Default)]
 #[command(name = "tclock", about = "A clock app in terminal", long_about = None)]
@@ -110,7 +117,7 @@ pub struct App {
     #[arg(short, long, value_parser = parse_color)]
     pub color: Option<Color>,
     /// Size of the clock, should be a positive integer (>=1).
-    #[arg(short, long, value_parser)]
+    #[arg(short, long, value_parser = parse_size)]
     pub size: Option<u16>,
 
     #[arg(skip)]
@@ -146,13 +153,8 @@ impl App {
                     let timer_config = config.as_ref().map(|c| &c.timer);
                     Mode::Timer {
                         durations: timer_config
-                            .map(|c| {
-                                c.durations
-                                    .iter()
-                                    .filter_map(|d| parse_duration(d).ok())
-                                    .collect()
-                            })
-                            .unwrap_or_else(|| vec![Duration::minutes(25), Duration::minutes(5)]),
+                            .map(configured_timer_durations)
+                            .unwrap_or_else(default_timer_config_durations),
                         titles: timer_config.map(|c| c.titles.clone()).unwrap_or_default(),
                         repeat: timer_config.map(|c| c.repeat).unwrap_or(false),
                         no_millis: !timer_config.map(|c| c.show_millis).unwrap_or(true),
@@ -168,7 +170,7 @@ impl App {
                         time: countdown_config
                             .and_then(|c| c.time.as_ref())
                             .and_then(|t| parse_datetime(t).ok())
-                            .unwrap_or_else(|| Local::now()),
+                            .unwrap_or_else(Local::now),
                         title: countdown_config.map(|c| c.title.clone()).unwrap_or(None),
                         continue_on_zero: countdown_config
                             .map(|c| c.continue_on_zero)
@@ -196,11 +198,14 @@ impl App {
                 .or(Some(Color::Green));
         }
         if self.size.is_none() {
-            self.size = default_config.map(|c| c.size).or(Some(1));
+            self.size = default_config
+                .map(|c| c.size)
+                .filter(|size| *size > 0)
+                .or(Some(DEFAULT_CLOCK_SIZE));
         }
 
         let style = Style::default().fg(self.color.unwrap_or(Color::Green));
-        let size = self.size.unwrap_or(1);
+        let size = self.size.unwrap_or(DEFAULT_CLOCK_SIZE);
 
         // initialize the clock mode
         match self.mode.as_ref().unwrap_or(&Mode::Clock {
@@ -331,27 +336,75 @@ fn handle_key<T: Pause>(widget: &mut T, key: KeyCode) {
     }
 }
 
+fn default_timer_config_durations() -> Vec<Duration> {
+    vec![
+        Duration::minutes(DEFAULT_TIMER_WORK_MINUTES),
+        Duration::minutes(DEFAULT_TIMER_BREAK_MINUTES),
+    ]
+}
+
+fn configured_timer_durations(config: &TimerConfig) -> Vec<Duration> {
+    let durations = config
+        .durations
+        .iter()
+        .filter_map(|duration| parse_duration(duration).ok())
+        .collect::<Vec<_>>();
+
+    if durations.is_empty() {
+        default_timer_config_durations()
+    } else {
+        durations
+    }
+}
+
+fn duration_regex() -> &'static Regex {
+    static DURATION_REGEX: OnceLock<Regex> = OnceLock::new();
+    DURATION_REGEX.get_or_init(|| Regex::new(r"^(\d+)([smhdSMHD])$").expect("valid duration regex"))
+}
+
+fn hex_color_regex() -> &'static Regex {
+    static HEX_COLOR_REGEX: OnceLock<Regex> = OnceLock::new();
+    HEX_COLOR_REGEX.get_or_init(|| Regex::new(r"^#([0-9a-f]{6})$").expect("valid color regex"))
+}
+
 fn parse_duration(s: &str) -> Result<Duration, String> {
-    let reg = Regex::new(r"^(\d+)([smhdSMHD])$").unwrap();
-    let cap = reg
+    let cap = duration_regex()
         .captures(s)
         .ok_or_else(|| format!("{} is not a valid duration", s))?;
 
-    let num = cap.get(1).unwrap().as_str().parse::<i64>().unwrap();
+    let num = cap
+        .get(1)
+        .expect("duration regex captures number")
+        .as_str()
+        .parse::<i64>()
+        .map_err(|_| format!("Duration is too large: {}", s))?;
     let unit = cap.get(2).unwrap().as_str().to_lowercase();
 
-    match unit.as_str() {
-        "s" => Ok(Duration::seconds(num)),
-        "m" => Ok(Duration::minutes(num)),
-        "h" => Ok(Duration::hours(num)),
-        "d" => Ok(Duration::days(num)),
-        _ => Err(format!("Invalid duration: {}", s)),
+    let duration = match unit.as_str() {
+        "s" => Duration::try_seconds(num),
+        "m" => Duration::try_minutes(num),
+        "h" => Duration::try_hours(num),
+        "d" => Duration::try_days(num),
+        _ => return Err(format!("Invalid duration: {}", s)),
+    };
+
+    duration.ok_or_else(|| format!("Duration is too large: {}", s))
+}
+
+fn parse_size(s: &str) -> Result<u16, String> {
+    let size = s
+        .parse::<u16>()
+        .map_err(|_| format!("Invalid clock size: {}", s))?;
+
+    if size == 0 {
+        Err("Clock size must be at least 1".to_string())
+    } else {
+        Ok(size)
     }
 }
 
 fn parse_color(s: &str) -> Result<Color, String> {
     let s = s.to_lowercase();
-    let reg = Regex::new(r"^#([0-9a-f]{6})$").unwrap();
     match s.as_str() {
         "black" => Ok(Color::Black),
         "red" => Ok(Color::Red),
@@ -370,15 +423,26 @@ fn parse_color(s: &str) -> Result<Color, String> {
         "lightcyan" => Ok(Color::LightCyan),
         "white" => Ok(Color::White),
         s => {
-            let cap = reg
+            let cap = hex_color_regex()
                 .captures(s)
                 .ok_or_else(|| format!("Invalid color: {}", s))?;
-            let hex = cap.get(1).unwrap().as_str();
-            let r = u8::from_str_radix(&hex[0..2], 16).unwrap();
-            let g = u8::from_str_radix(&hex[2..4], 16).unwrap();
-            let b = u8::from_str_radix(&hex[4..], 16).unwrap();
+            let hex = cap.get(1).expect("color regex captures hex value").as_str();
+            let r = u8::from_str_radix(&hex[0..2], 16)
+                .map_err(|error| format!("Invalid red channel in color {}: {}", s, error))?;
+            let g = u8::from_str_radix(&hex[2..4], 16)
+                .map_err(|error| format!("Invalid green channel in color {}: {}", s, error))?;
+            let b = u8::from_str_radix(&hex[4..], 16)
+                .map_err(|error| format!("Invalid blue channel in color {}: {}", s, error))?;
             Ok(Color::Rgb(r, g, b))
         }
+    }
+}
+
+fn local_datetime(date_time: NaiveDateTime) -> Result<DateTime<Local>, String> {
+    match Local.from_local_datetime(&date_time) {
+        LocalResult::Single(date_time) => Ok(date_time),
+        LocalResult::Ambiguous(_, _) => Err(format!("Ambiguous local time: {}", date_time)),
+        LocalResult::None => Err(format!("Invalid local time: {}", date_time)),
     }
 }
 
@@ -389,24 +453,24 @@ fn parse_datetime(s: &str) -> Result<DateTime<Local>, String> {
     let time = NaiveTime::parse_from_str(s, "%H:%M");
     if let Ok(time) = time {
         let time = NaiveDateTime::new(today, time);
-        return Ok(Local.from_local_datetime(&time).unwrap());
+        return local_datetime(time);
     }
 
     let time = NaiveTime::parse_from_str(s, "%H:%M:%S");
     if let Ok(time) = time {
         let time = NaiveDateTime::new(today, time);
-        return Ok(Local.from_local_datetime(&time).unwrap());
+        return local_datetime(time);
     }
 
     let date = NaiveDate::parse_from_str(s, "%Y-%m-%d");
     if let Ok(date) = date {
         let time = NaiveDateTime::new(date, NaiveTime::from_hms_opt(0, 0, 0).unwrap());
-        return Ok(Local.from_local_datetime(&time).unwrap());
+        return local_datetime(time);
     }
 
     let date_time = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S");
     if let Ok(date_time) = date_time {
-        return Ok(Local.from_local_datetime(&date_time).unwrap());
+        return local_datetime(date_time);
     }
 
     let rfc_time = DateTime::parse_from_rfc3339(s);
@@ -419,4 +483,62 @@ fn parse_datetime(s: &str) -> Result<DateTime<Local>, String> {
 
 fn parse_timezone(s: &str) -> Result<Tz, String> {
     s.parse::<Tz>().map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_duration_accepts_supported_units() {
+        assert_eq!(parse_duration("10s").unwrap(), Duration::seconds(10));
+        assert_eq!(parse_duration("5M").unwrap(), Duration::minutes(5));
+        assert_eq!(parse_duration("2h").unwrap(), Duration::hours(2));
+        assert_eq!(parse_duration("1D").unwrap(), Duration::days(1));
+    }
+
+    #[test]
+    fn parse_duration_rejects_invalid_or_overflowing_values() {
+        assert!(parse_duration("10").is_err());
+        assert!(parse_duration("abc").is_err());
+        assert!(parse_duration("999999999999999999999999999999999999999d").is_err());
+    }
+
+    #[test]
+    fn configured_timer_durations_falls_back_when_all_values_are_invalid() {
+        let config = TimerConfig {
+            durations: vec!["bad".to_string()],
+            ..TimerConfig::default()
+        };
+
+        assert_eq!(
+            configured_timer_durations(&config),
+            default_timer_config_durations()
+        );
+    }
+
+    #[test]
+    fn parse_size_rejects_zero() {
+        assert_eq!(parse_size("1"), Ok(1));
+        assert!(parse_size("0").is_err());
+    }
+
+    #[test]
+    fn parse_color_accepts_names_and_hex_values() {
+        assert_eq!(parse_color("LightCyan"), Ok(Color::LightCyan));
+        assert_eq!(parse_color("#e63946"), Ok(Color::Rgb(230, 57, 70)));
+        assert!(parse_color("#xyzxyz").is_err());
+    }
+
+    #[test]
+    fn parse_datetime_accepts_dates_and_rejects_invalid_values() {
+        assert!(parse_datetime("2026-01-01").is_ok());
+        assert!(parse_datetime("not a date").is_err());
+    }
+
+    #[test]
+    fn parse_timezone_reports_invalid_names() {
+        assert!(parse_timezone("America/New_York").is_ok());
+        assert!(parse_timezone("Nowhere/Missing").is_err());
+    }
 }

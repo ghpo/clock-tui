@@ -7,6 +7,7 @@ mod timer;
 
 use std::cmp::min;
 use std::fmt::Write as _;
+use std::time::Instant;
 
 use crate::clock_text::ClockText;
 use chrono::Duration;
@@ -22,6 +23,10 @@ use ratatui::{
 };
 pub(crate) use stopwatch::Stopwatch;
 pub(crate) use timer::Timer;
+
+pub(crate) const PAUSED_FOOTER: &str = "PAUSED (press <SPACE> to resume)";
+const FLASH_PERIOD_MILLIS: i64 = 1000;
+const FLASH_ON_MILLIS: i64 = 500;
 
 #[derive(Copy, Clone)]
 pub(crate) enum DurationFormat {
@@ -75,6 +80,14 @@ fn format_duration(duration: Duration, format: DurationFormat) -> String {
     result
 }
 
+fn elapsed_since(started_at: Instant) -> Duration {
+    Duration::from_std(started_at.elapsed()).unwrap_or(Duration::MAX)
+}
+
+fn should_flash(duration: Duration) -> bool {
+    duration.num_milliseconds().abs() % FLASH_PERIOD_MILLIS < FLASH_ON_MILLIS
+}
+
 fn render_centered(
     area: Rect,
     buf: &mut Buffer,
@@ -90,10 +103,7 @@ fn render_centered(
         height: min(text_size.1, area.height),
     };
 
-    if header.is_some()
-        && area.top() + 2 == text_area.top()
-        && text_area.bottom() < area.bottom()
-    {
+    if header.is_some() && area.top() + 2 == text_area.top() && text_area.bottom() < area.bottom() {
         text_area.y += 1;
     }
 
@@ -122,5 +132,50 @@ fn render_centered(
         if area.bottom() >= text_area.bottom() + 2 {
             render_text_center(text.as_str(), text_area.bottom() + 1, buf);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_duration_supports_deciseconds() {
+        assert_eq!(
+            format_duration(
+                Duration::milliseconds(65_432),
+                DurationFormat::HourMinSecDeci
+            ),
+            "1:05.4"
+        );
+    }
+
+    #[test]
+    fn format_duration_supports_no_fractional_seconds() {
+        assert_eq!(
+            format_duration(Duration::seconds(65), DurationFormat::HourMinSec),
+            "1:05"
+        );
+    }
+
+    #[test]
+    fn format_duration_supports_hours_days_and_negative_values() {
+        let duration =
+            Duration::days(1) + Duration::hours(2) + Duration::minutes(3) + Duration::seconds(4);
+
+        assert_eq!(
+            format_duration(duration, DurationFormat::HourMinSecDeci),
+            "1:02:03:04.0"
+        );
+        assert_eq!(
+            format_duration(-Duration::seconds(65), DurationFormat::HourMinSecDeci),
+            "-1:05.0"
+        );
+    }
+
+    #[test]
+    fn should_flash_uses_first_half_of_each_second() {
+        assert!(should_flash(Duration::milliseconds(-499)));
+        assert!(!should_flash(Duration::milliseconds(-500)));
     }
 }

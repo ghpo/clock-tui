@@ -1,10 +1,10 @@
 # AGENTS.md
 
 ## Commands
-- CI is only `cargo build --verbose` followed by `cargo test --verbose` (`.github/workflows/rust.yml`). Run both before claiming CI parity.
+- CI parity is `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo build --locked --verbose`, `cargo test --locked --verbose`, then `cargo xtask` followed by `git diff --exit-code assets/gen` (`.github/workflows/rust.yml`). Run all before claiming CI parity.
 - Local aliases live in `.cargo/config.toml`: `cargo main -- <tclock args>` runs the app crate, and `cargo xtask` runs the generator helper.
 - For package-scoped checks, use the workspace package names: `cargo test --package clock-tui` or `cargo test --package xtask`.
-- There are no repo-specific lint, fmt, clippy, or typecheck scripts/configs beyond Cargo defaults.
+- Rust CI enforces rustfmt, clippy warnings as errors, locked dependency resolution, tests, and generated completion/manpage drift.
 
 ## Repo shape
 - Root is a Cargo workspace with two members: `clock-tui` (the published app crate) and `xtask` (generation helper).
@@ -13,7 +13,7 @@
 - `clock-tui/src/bin/main.rs` owns terminal raw/alternate-screen setup and the draw/key loop. Keep CLI parsing before alternate-screen setup so `--help` prints normally.
 
 ## Generated assets
-- `cargo xtask` regenerates shell completions and the `tclock.1` manpage into `assets/gen` using the clap `App` definition. Rerun it after changing CLI flags/subcommands if generated assets are part of the change.
+- `cargo xtask` regenerates shell completions and the `tclock.1` manpage into `assets/gen` using the clap `App` definition. CI fails if `cargo xtask` changes `assets/gen`, so rerun it after changing CLI flags/subcommands/help text.
 
 ## Release / packaging
 - `.github/workflows/release.yml` builds `tclock` release tarballs for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`, creates a GitHub Release on `v*` tags, and publishes `clock-tui-bin` to AUR when `AUR_SSH_KEY` is configured.

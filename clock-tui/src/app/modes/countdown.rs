@@ -3,7 +3,7 @@ use crate::clock_text::ClockText;
 use chrono::{DateTime, Duration, Local};
 use ratatui::{style::Style, widgets::Widget};
 
-use super::{format_duration, render_centered, DurationFormat};
+use super::{format_duration, render_centered, should_flash, DurationFormat};
 
 pub struct Countdown {
     pub size: u16,
@@ -31,7 +31,7 @@ impl Widget for &Countdown {
     fn render(self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         let remaining_time = self.remaining_time();
         let time_str = if remaining_time < Duration::zero() && !self.continue_on_zero {
-            if (remaining_time.num_milliseconds()).abs() % 1000 < 500 {
+            if should_flash(remaining_time) {
                 return;
             } else {
                 format_duration(Duration::zero(), self.format)

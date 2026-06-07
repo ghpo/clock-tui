@@ -3,6 +3,9 @@ use std::path::{Path, PathBuf};
 use chrono_tz::Tz;
 use serde::{Deserialize, Deserializer};
 
+pub(crate) const DEFAULT_WIDGET_REFRESH_SECS: u64 = 15 * 60;
+pub(crate) const DEFAULT_WIDGET_TIMEOUT_SECS: u64 = 30;
+
 fn deserialize_timezone<'de, D>(deserializer: D) -> Result<Option<Tz>, D::Error>
 where
     D: Deserializer<'de>,
@@ -99,10 +102,10 @@ pub struct TimerConfig {
     pub execute: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct StopwatchConfig {}
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct CountdownConfig {
     #[serde(default)]
     pub time: Option<String>,
@@ -152,24 +155,6 @@ impl Default for TimerConfig {
     }
 }
 
-impl Default for StopwatchConfig {
-    fn default() -> Self {
-        Self {}
-    }
-}
-
-impl Default for CountdownConfig {
-    fn default() -> Self {
-        Self {
-            time: None,
-            title: None,
-            show_millis: false,
-            continue_on_zero: false,
-            reverse: false,
-        }
-    }
-}
-
 fn default_mode() -> String {
     "clock".to_string()
 }
@@ -195,11 +180,11 @@ fn default_timer_durations() -> Vec<String> {
 }
 
 fn default_widget_refresh_secs() -> u64 {
-    15 * 60
+    DEFAULT_WIDGET_REFRESH_SECS
 }
 
 fn default_widget_timeout_secs() -> u64 {
-    30
+    DEFAULT_WIDGET_TIMEOUT_SECS
 }
 
 impl Config {

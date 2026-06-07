@@ -1,12 +1,15 @@
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 
-use crate::clock_text::point::Point;
+use crate::clock_text::{point::Point, CHARACTER_SPACING};
 
 use super::Font;
 
 pub struct BricksFont {
     pub size: u16,
 }
+
+const GLYPH_COLUMNS: u16 = 6;
+const GLYPH_ROWS: u16 = 5;
 
 impl BricksFont {
     pub fn new(size: u16) -> Self {
@@ -32,7 +35,7 @@ impl BricksFont {
         let mut p = start;
         let mut on = false;
         for len in row {
-            let len = len * size;
+            let len = len.saturating_mul(size);
             if p.0 >= area_right {
                 break;
             }
@@ -49,7 +52,7 @@ impl BricksFont {
                 }
             }
 
-            p.0 += len;
+            p.0 = p.0.saturating_add(len);
             on = !on;
         }
     }
@@ -136,11 +139,11 @@ impl Font for BricksFont {
     }
 
     fn get_char_width(&self) -> u16 {
-        6 * self.size
+        GLYPH_COLUMNS.saturating_mul(self.size)
     }
 
     fn get_char_height(&self) -> u16 {
-        5 * self.size
+        GLYPH_ROWS.saturating_mul(self.size)
     }
 
     fn draw_char(&self, c: char, x: u16, y: u16, style: Style, buf: &mut Buffer) {
@@ -150,13 +153,14 @@ impl Font for BricksFont {
     fn draw_str(&self, s: &str, area: Rect, style: Style, buf: &mut Buffer) {
         let mut x = area.x;
         let y = area.y;
-        let spacing = 2;
         for c in s.chars() {
-            if x + self.get_char_width() > area.right() {
+            if x.saturating_add(self.get_char_width()) > area.right() {
                 break;
             }
             self.draw_char_in_area(c, x, y, area, style, buf);
-            x += self.get_char_width() + spacing;
+            x = x
+                .saturating_add(self.get_char_width())
+                .saturating_add(CHARACTER_SPACING);
         }
     }
 }

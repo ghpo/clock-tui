@@ -1,17 +1,19 @@
+use std::time::Instant;
+
 use crate::clock_text::font::bricks::BricksFont;
 use crate::clock_text::ClockText;
-use chrono::{DateTime, Duration, Local};
+use chrono::Duration;
 use ratatui::{buffer::Buffer, layout::Rect, style::Style, widgets::Widget};
 
 use crate::app::modes::pause::Pause;
 
-use super::{format_duration, render_centered, DurationFormat};
+use super::{elapsed_since, format_duration, render_centered, DurationFormat, PAUSED_FOOTER};
 
 pub struct Stopwatch {
     pub size: u16,
     pub style: Style,
     duration: Duration,
-    started_at: Option<DateTime<Local>>,
+    started_at: Option<Instant>,
 }
 
 impl Stopwatch {
@@ -20,14 +22,13 @@ impl Stopwatch {
             size,
             style,
             duration: Duration::zero(),
-            started_at: Some(Local::now()),
+            started_at: Some(Instant::now()),
         }
     }
 
     pub(crate) fn total_time(&self) -> Duration {
         if let Some(start_at) = self.started_at {
-            let now = Local::now();
-            self.duration + now.signed_duration_since(start_at)
+            self.duration + elapsed_since(start_at)
         } else {
             self.duration
         }
@@ -44,7 +45,7 @@ impl Widget for &Stopwatch {
         let font = BricksFont::new(self.size);
         let text = ClockText::new(time_str.to_string(), &font, self.style);
         let footer = if self.is_paused() {
-            Some("PAUSED (press <SPACE> to resume)".to_string())
+            Some(PAUSED_FOOTER.to_string())
         } else {
             None
         };
@@ -59,15 +60,14 @@ impl Pause for Stopwatch {
 
     fn pause(&mut self) {
         if let Some(start_at) = self.started_at {
-            let now = Local::now();
-            self.duration = self.duration + now.signed_duration_since(start_at);
+            self.duration += elapsed_since(start_at);
             self.started_at = None;
         }
     }
 
     fn resume(&mut self) {
         if self.started_at.is_none() {
-            self.started_at = Some(Local::now());
+            self.started_at = Some(Instant::now());
         }
     }
 }

@@ -57,14 +57,13 @@ impl Widget for &Clock {
         } else {
             Local::now().naive_local()
         };
-        let mut time_str = now.format("%H:%M:%S%.3f").to_string();
-        if self.show_millis {
-            time_str.truncate(time_str.len() - 2);
-        } else if !self.show_secs {
-            time_str.truncate(time_str.len() - 7);
+        let time_str = if self.show_millis {
+            now.format("%H:%M:%S%.1f").to_string()
+        } else if self.show_secs {
+            now.format("%H:%M:%S").to_string()
         } else {
-            time_str.truncate(time_str.len() - 4);
-        }
+            now.format("%H:%M").to_string()
+        };
         let time_str = time_str.as_str();
         let header = if self.show_date {
             let mut title = now.format("%Y-%m-%d").to_string();

@@ -20,12 +20,29 @@ use ratatui::{
     widgets::{Paragraph, Widget, Wrap},
 };
 
-use crate::config::ClockWidgetConfig;
+use crate::config::{ClockWidgetConfig, DEFAULT_WIDGET_REFRESH_SECS, DEFAULT_WIDGET_TIMEOUT_SECS};
 
-const DEFAULT_REFRESH: Duration = Duration::from_secs(15 * 60);
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+const DEFAULT_REFRESH: Duration = Duration::from_secs(DEFAULT_WIDGET_REFRESH_SECS);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(DEFAULT_WIDGET_TIMEOUT_SECS);
 const MAX_WIDGETS: usize = 6;
+const SQUARE_TERMINAL_WIDGETS: usize = 2;
+const WIDE_TERMINAL_WIDGETS: usize = 4;
+const ULTRAWIDE_TERMINAL_WIDGETS: usize = 6;
+
+// Terminal cells are generally about twice as tall as they are wide in pixels.
+// Use this to approximate visual aspect ratio from character-cell dimensions.
 const CELL_HEIGHT_TO_WIDTH_RATIO: f32 = 2.0;
+const WIDE_TERMINAL_ASPECT: f32 = 1.5;
+const ULTRAWIDE_TERMINAL_ASPECT: f32 = 2.2;
+const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(50);
+const PROCESS_GROUP_KILL_GRACE: Duration = Duration::from_millis(100);
+const MAX_WIDGET_OUTPUT_BYTES: usize = 64 * 1024;
+const CLOCK_GLYPH_COLUMNS: usize = 6;
+const CLOCK_GLYPH_ROWS: usize = 5;
+const CLOCK_CHARACTER_SPACING: u16 = 2;
+const CLOCK_HORIZONTAL_MARGIN: u16 = 4;
+const CLOCK_HEADER_VERTICAL_PADDING: u16 = 4;
+const CLOCK_NO_HEADER_VERTICAL_PADDING: u16 = 2;
 
 pub(crate) struct ClockWidgets {
     widgets: Vec<ClockWidget>,
@@ -249,7 +266,7 @@ fn run_command(command: Vec<String>, timeout: Duration, cancel: Arc<AtomicBool>)
                 let _ = join_output(stderr);
                 return format!("[timeout] command exceeded {}s", timeout.as_secs());
             }
-            Ok(None) => thread::sleep(Duration::from_millis(50)),
+            Ok(None) => thread::sleep(WORKER_POLL_INTERVAL),
             Err(error) => {
                 let _ = child.kill();
                 return format!("[error] failed to wait for command: {}", error);
@@ -260,7 +277,20 @@ fn run_command(command: Vec<String>, timeout: Duration, cancel: Arc<AtomicBool>)
 
 fn read_to_end(reader: &mut impl Read) -> Vec<u8> {
     let mut output = Vec::new();
-    let _ = reader.read_to_end(&mut output);
+    let mut buffer = [0; 8 * 1024];
+
+    loop {
+        let bytes_read = match reader.read(&mut buffer) {
+            Ok(0) | Err(_) => break,
+            Ok(bytes_read) => bytes_read,
+        };
+
+        let remaining = MAX_WIDGET_OUTPUT_BYTES.saturating_sub(output.len());
+        if remaining > 0 {
+            output.extend_from_slice(&buffer[..bytes_read.min(remaining)]);
+        }
+    }
+
     output
 }
 
@@ -289,7 +319,7 @@ fn terminate_child(child: &mut Child) {
 fn terminate_process_group(pid: u32) {
     let process_group = format!("-{}", pid);
     if silent_kill("-TERM", &process_group) {
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(PROCESS_GROUP_KILL_GRACE);
         let _ = silent_kill("-KILL", &process_group);
     }
 }
@@ -411,6 +441,8 @@ fn push_span(spans: &mut Vec<Span<'static>>, text: &mut String, style: Style) {
 }
 
 fn apply_sgr_sequence(mut style: Style, base_style: Style, sequence: &str) -> Style {
+    // Numeric SGR values are standardized ANSI escape codes. Keep the raw values
+    // here so the match mirrors terminal documentation (0 reset, 30-37 fg, etc.).
     let values = parse_sgr_values(sequence);
     let mut idx = 0;
 
@@ -539,12 +571,12 @@ pub(crate) fn max_widgets_for_area(area: Rect) -> usize {
     let height = area.height.max(1) as f32;
     let aspect = area.width as f32 / (height * CELL_HEIGHT_TO_WIDTH_RATIO);
 
-    if aspect < 1.5 {
-        2
-    } else if aspect < 2.2 {
-        4
+    if aspect < WIDE_TERMINAL_ASPECT {
+        SQUARE_TERMINAL_WIDGETS
+    } else if aspect < ULTRAWIDE_TERMINAL_ASPECT {
+        WIDE_TERMINAL_WIDGETS
     } else {
-        6
+        ULTRAWIDE_TERMINAL_WIDGETS
     }
 }
 
@@ -553,34 +585,37 @@ pub(crate) fn clock_size_for_area(text_len: usize, area: Rect, has_header: bool)
         return 1;
     }
 
-    let spacing = 2 * text_len.saturating_sub(1) as u16;
-    let horizontal_margin = 4;
-    let width_budget = area.width.saturating_sub(spacing + horizontal_margin) as usize;
-    let width_size = width_budget / (6 * text_len);
+    let spacing = CLOCK_CHARACTER_SPACING.saturating_mul(text_len.saturating_sub(1) as u16);
+    let width_budget =
+        area.width
+            .saturating_sub(spacing.saturating_add(CLOCK_HORIZONTAL_MARGIN)) as usize;
+    let width_size = width_budget / (CLOCK_GLYPH_COLUMNS * text_len);
 
     let height_budget = area
         .height
         .saturating_sub(clock_vertical_padding(has_header)) as usize;
-    let height_size = height_budget / 5;
+    let height_size = height_budget / CLOCK_GLYPH_ROWS;
 
     width_size.min(height_size).max(1) as u16
 }
 
 pub(crate) fn clock_height_for_size(size: u16, has_header: bool) -> u16 {
-    size.saturating_mul(5)
+    size.saturating_mul(CLOCK_GLYPH_ROWS as u16)
         .saturating_add(clock_vertical_padding(has_header))
 }
 
 fn clock_vertical_padding(has_header: bool) -> u16 {
     if has_header {
-        4
+        CLOCK_HEADER_VERTICAL_PADDING
     } else {
-        2
+        CLOCK_NO_HEADER_VERTICAL_PADDING
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use super::*;
 
     #[test]
@@ -602,7 +637,8 @@ mod tests {
     fn clock_size_fits_width_and_height() {
         let area = Rect::new(0, 0, 80, 20);
         let size = clock_size_for_area(8, area, true);
-        let width = 8 * (6 * size + 2) - 2;
+        let width = 8 * (CLOCK_GLYPH_COLUMNS as u16 * size + CLOCK_CHARACTER_SPACING)
+            - CLOCK_CHARACTER_SPACING;
         let height = clock_height_for_size(size, true);
 
         assert!(width <= area.width);
@@ -629,6 +665,16 @@ mod tests {
         let output = format_output(true, b"\x1b[2mok\x1b[0m\r\n".to_vec(), Vec::new());
 
         assert_eq!(output, "\x1b[2mok\x1b[0m");
+    }
+
+    #[test]
+    fn widget_output_reader_caps_large_outputs() {
+        let input = vec![b'a'; MAX_WIDGET_OUTPUT_BYTES + 1024];
+        let mut reader = Cursor::new(input);
+
+        let output = read_to_end(&mut reader);
+
+        assert_eq!(output.len(), MAX_WIDGET_OUTPUT_BYTES);
     }
 
     #[test]

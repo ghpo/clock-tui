@@ -85,7 +85,7 @@ tclock --size 2
 tclock timer --duration 5m
 ```
 
-Durations can use suffixes such as `s`, `m`, and `h`. Timer mode can run several durations sequentially and can execute a command when time is up:
+Durations can use suffixes such as `s`, `m`, `h`, and `d`. Timer mode can run several durations sequentially and can execute a command when time is up:
 
 ```shell
 tclock timer --duration 25m 5m --title Focus Break
@@ -202,6 +202,8 @@ command = ["sh", "-c", "printf 'hello from a widget'"]
 ```
 
 Widget commands should be finite stdout-producing commands that exit. Long-running alternate-screen TUIs are not a good fit unless they also provide a command or flag that prints a snapshot and exits.
+
+Widget output is intended for compact status text and is capped in memory; very large command outputs are truncated.
 
 ## Credits
 

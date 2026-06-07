@@ -2,7 +2,7 @@ pub mod bricks;
 
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 
-use super::point::Point;
+use super::{point::Point, CHARACTER_SPACING};
 
 pub trait Font {
     fn get_char(&self, c: char) -> Option<&[Point]>;
@@ -12,8 +12,8 @@ pub trait Font {
     fn draw_char(&self, c: char, x: u16, y: u16, style: Style, buf: &mut Buffer) {
         if let Some(points) = self.get_char(c) {
             for point in points {
-                let x = x + point.0;
-                let y = y + point.1;
+                let x = x.saturating_add(point.0);
+                let y = y.saturating_add(point.1);
                 if x < buf.area.right() && y < buf.area.bottom() {
                     buf[(x, y)].set_style(style);
                 }
@@ -24,13 +24,14 @@ pub trait Font {
     fn draw_str(&self, s: &str, area: Rect, style: Style, buf: &mut Buffer) {
         let mut x = area.x;
         let y = area.y;
-        let spacing = 2;
         for c in s.chars() {
-            if x + self.get_char_width() > area.right() {
+            if x.saturating_add(self.get_char_width()) > area.right() {
                 break;
             }
             self.draw_char(c, x, y, style, buf);
-            x += self.get_char_width() + spacing;
+            x = x
+                .saturating_add(self.get_char_width())
+                .saturating_add(CHARACTER_SPACING);
         }
     }
 }

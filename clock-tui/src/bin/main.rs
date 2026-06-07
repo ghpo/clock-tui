@@ -5,6 +5,7 @@ use std::time::Duration;
 use clap::Parser;
 use clock_tui::app::App;
 use clock_tui::app::Mode;
+use crossterm::cursor::Show;
 use crossterm::event::{self, Event, KeyCode};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
@@ -12,16 +13,35 @@ use crossterm::ExecutableCommand;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
+struct TerminalSession;
+
+impl TerminalSession {
+    fn enter() -> Result<Self, Box<dyn Error>> {
+        enable_raw_mode()?;
+        if let Err(error) = io::stdout().execute(EnterAlternateScreen) {
+            let _ = disable_raw_mode();
+            return Err(Box::new(error));
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for TerminalSession {
+    fn drop(&mut self) {
+        let _ = io::stdout().execute(Show);
+        let _ = disable_raw_mode();
+        let _ = io::stdout().execute(LeaveAlternateScreen);
+    }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     // Parse command line arguments
     // Must be done first so `--help` isn't printed to the alternate screen.
     let mut app = App::parse();
 
-    // Setup terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    stdout.execute(EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(&mut stdout);
+    // Setup terminal. The guard restores raw mode / alternate screen on early errors.
+    let terminal_session = TerminalSession::enter()?;
+    let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
 
     // Load config and initialize app
@@ -61,11 +81,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    // restore terminal
+    // Restore terminal before printing exit messages.
     terminal.show_cursor()?;
     drop(terminal);
-    disable_raw_mode()?;
-    stdout.execute(LeaveAlternateScreen)?;
+    drop(terminal_session);
 
     // Perform logic such as printing the stopwatch time.
     // Must be done after leaving alternate screen.

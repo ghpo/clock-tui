@@ -1,9 +1,9 @@
-use std::{cell::RefCell, cmp::min, process::Command};
+use std::{cell::RefCell, cmp::min, process::Command, time::Instant};
 
 use crate::app::modes::pause::Pause;
 use crate::clock_text::font::bricks::BricksFont;
 use crate::clock_text::ClockText;
-use chrono::{DateTime, Duration, Local};
+use chrono::Duration;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -11,7 +11,11 @@ use ratatui::{
     widgets::Widget,
 };
 
-use super::{format_duration, render_centered, DurationFormat};
+use super::{
+    elapsed_since, format_duration, render_centered, should_flash, DurationFormat, PAUSED_FOOTER,
+};
+
+const DEFAULT_TIMER_MINUTES: i64 = 5;
 
 pub struct Timer {
     pub size: u16,
@@ -23,9 +27,9 @@ pub struct Timer {
     auto_quit: bool,
     format: DurationFormat,
     passed: Duration,
-    started_at: Option<DateTime<Local>>,
+    started_at: Option<Instant>,
     execute_result: RefCell<Option<String>>,
-    flash_state: RefCell<bool>, // Add this new field
+    flash_state: RefCell<bool>,
 }
 
 impl Timer {
@@ -44,41 +48,57 @@ impl Timer {
         Self {
             size,
             style,
-            durations,
+            durations: normalize_durations(durations),
             titles,
             repeat,
             execute,
             auto_quit,
             format,
             passed: Duration::zero(),
-            started_at: (!paused).then(Local::now),
+            started_at: (!paused).then(Instant::now),
             execute_result: RefCell::new(None),
-            flash_state: RefCell::new(false), // Initialize the new field
+            flash_state: RefCell::new(false),
         }
     }
 
+    pub(crate) fn default_durations() -> Vec<Duration> {
+        vec![Duration::minutes(DEFAULT_TIMER_MINUTES)]
+    }
+
     pub(crate) fn remaining_time(&self) -> (Duration, usize) {
+        if self.durations.is_empty() {
+            return (Duration::zero(), 0);
+        }
+
         let total_passed = if let Some(started_at) = self.started_at {
-            self.passed + (Local::now() - started_at)
+            self.passed + elapsed_since(started_at)
         } else {
             self.passed
         };
 
         let mut idx = 0;
-        let mut next_checkpoint = self.durations[idx];
+        let mut next_checkpoint = self.durations[0];
         while next_checkpoint < total_passed {
             if idx >= self.durations.len() - 1 && !self.repeat {
                 break;
             }
             idx = (idx + 1) % self.durations.len();
-            next_checkpoint = next_checkpoint + self.durations[idx];
+            next_checkpoint += self.durations[idx];
         }
 
         (next_checkpoint - total_passed, idx)
     }
 
     pub(crate) fn is_finished(&self) -> bool {
-        return self.auto_quit && !self.execute_result.borrow().is_none();
+        self.auto_quit && self.execute_result.borrow().is_some()
+    }
+}
+
+fn normalize_durations(durations: Vec<Duration>) -> Vec<Duration> {
+    if durations.is_empty() {
+        Timer::default_durations()
+    } else {
+        durations
     }
 }
 
@@ -117,7 +137,7 @@ impl Widget for &Timer {
             }
 
             // Flash the screen when timer is done
-            let should_flash = remaining_time.num_milliseconds().abs() % 1000 < 500;
+            let should_flash = should_flash(remaining_time);
             *self.flash_state.borrow_mut() = should_flash;
 
             // Fill the entire area with the flash color
@@ -152,7 +172,7 @@ impl Widget for &Timer {
                 );
 
                 let footer = if self.is_paused() {
-                    Some("PAUSED (press <SPACE> to resume)".to_string())
+                    Some(PAUSED_FOOTER.to_string())
                 } else {
                     self.execute_result.borrow().clone()
                 };
@@ -172,7 +192,7 @@ impl Widget for &Timer {
             let text = ClockText::new(time_str.as_str().to_string(), &font, self.style);
 
             let footer = if self.is_paused() {
-                Some("PAUSED (press <SPACE> to resume)".to_string())
+                Some(PAUSED_FOOTER.to_string())
             } else {
                 self.execute_result.borrow().clone()
             };
@@ -189,14 +209,40 @@ impl Pause for Timer {
 
     fn pause(&mut self) {
         if let Some(started_at) = self.started_at {
-            self.passed = self.passed + (Local::now() - started_at);
+            self.passed += elapsed_since(started_at);
             self.started_at = None;
         }
     }
 
     fn resume(&mut self) {
         if self.started_at.is_none() {
-            self.started_at = Some(Local::now());
+            self.started_at = Some(Instant::now());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_duration_list_falls_back_to_default_timer() {
+        let timer = Timer::new(
+            1,
+            Style::default(),
+            Vec::new(),
+            Vec::new(),
+            false,
+            DurationFormat::HourMinSec,
+            true,
+            false,
+            Vec::new(),
+        );
+
+        assert_eq!(timer.durations, Timer::default_durations());
+        assert_eq!(
+            timer.remaining_time(),
+            (Duration::minutes(DEFAULT_TIMER_MINUTES), 0)
+        );
     }
 }
