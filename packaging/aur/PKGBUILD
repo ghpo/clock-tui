@@ -1,0 +1,41 @@
+# Maintainer: AkitaOnRails <boss@akitaonrails.com>
+
+pkgname=clock-tui
+pkgver=0.6.1
+pkgrel=1
+pkgdesc="A terminal clock app with clock, timer, stopwatch, countdown, and clock widgets"
+arch=('x86_64' 'aarch64')
+url="https://github.com/akitaonrails/clock-tui"
+license=('MIT')
+depends=('gcc-libs')
+makedepends=('cargo')
+options=('!debug')
+conflicts=('clock-tui-bin')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    cargo build --frozen --release --package clock-tui --bin tclock
+}
+
+check() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo test --frozen --release --package clock-tui
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    install -Dm0755 -t "$pkgdir/usr/bin/"                "target/release/tclock"
+    install -Dm0644 -t "$pkgdir/usr/share/doc/$pkgname/" "README.md"
+    install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

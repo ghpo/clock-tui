@@ -4,10 +4,19 @@ version = "0.6.1"
 edition = "2021"
 license = "MIT"
 description = "A clock app in terminal"
-homepage = "https://github.com/race604/clock-tui"
-repository = "https://github.com/race604/clock-tui"
+homepage = "https://github.com/akitaonrails/clock-tui"
+repository = "https://github.com/akitaonrails/clock-tui"
 readme = "README.md"
 authors = ["Race604 <race604@gmail.com>"]
+exclude = [
+    "packaging/*",
+    ".github/*",
+]
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/clock-tui-linux-{ target-arch }.tar.gz"
+pkg-fmt = "tgz"
+bin-dir = "{ bin }{ binary-ext }"
 
 [dependencies]
 ratatui = "0.25.0"
