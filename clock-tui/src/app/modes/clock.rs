@@ -1,7 +1,7 @@
 use crate::clock_text::font::bricks::BricksFont;
 use crate::clock_text::ClockText;
 use crate::config::ClockWidgetConfig;
-use chrono::{Local, Utc};
+use chrono::{Local, NaiveDateTime, Utc};
 use chrono_tz::Tz;
 use ratatui::{
     buffer::Buffer,
@@ -66,12 +66,7 @@ impl Widget for &Clock {
         };
         let time_str = time_str.as_str();
         let header = if self.show_date {
-            let mut title = now.format("%Y-%m-%d").to_string();
-            if let Some(tz) = self.timezone {
-                title.push(' ');
-                title.push_str(tz.name());
-            }
-            Some(title)
+            Some(format_clock_header(now, self.timezone))
         } else {
             None
         };
@@ -123,6 +118,15 @@ fn clock_height_budget(area_height: u16) -> u16 {
     } else {
         (area_height / 2).max(1)
     }
+}
+
+fn format_clock_header(now: NaiveDateTime, timezone: Option<Tz>) -> String {
+    let mut title = now.format("%A, %B %-d %Y").to_string();
+    if let Some(tz) = timezone {
+        title.push(' ');
+        title.push_str(tz.name());
+    }
+    title
 }
 
 impl Clock {
@@ -178,5 +182,17 @@ mod tests {
 
         assert_eq!(layout.clock_area.height, 1);
         assert_eq!(layout.widgets_area.height, 0);
+    }
+
+    #[test]
+    fn clock_header_uses_friendly_date_format() {
+        let now =
+            NaiveDateTime::parse_from_str("2026-06-07 01:41:24", "%Y-%m-%d %H:%M:%S").unwrap();
+
+        assert_eq!(format_clock_header(now, None), "Sunday, June 7 2026");
+        assert_eq!(
+            format_clock_header(now, Some(chrono_tz::America::New_York)),
+            "Sunday, June 7 2026 America/New_York"
+        );
     }
 }
