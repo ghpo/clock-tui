@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Tag to build (e.g. v0.6.2)"
+        description: "Tag to build (e.g. v0.6.3)"
         required: true
         default: ""
 

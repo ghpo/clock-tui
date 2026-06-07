@@ -1,5 +1,4 @@
-
-use ratatui::{buffer::Buffer, style::Style};
+use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 
 use crate::clock_text::point::Point;
 
@@ -34,18 +33,19 @@ impl BricksFont {
         let mut on = false;
         for len in row {
             let len = len * size;
-            if p.0 > area_right {
+            if p.0 >= area_right {
                 break;
             }
 
             if on {
-                let s = std::cmp::min(len, area_right - p.0 + 1);
+                let s = std::cmp::min(len, area_right - p.0);
                 let line = "█".repeat(s as usize);
                 for r in 0..size {
-                    if p.1 > area_bottom {
+                    let y = p.1 + r;
+                    if y >= area_bottom {
                         break;
                     }
-                    buf.set_string(p.0, p.1 + r, line.as_str(), style);
+                    buf.set_string(p.0, y, line.as_str(), style);
                 }
             }
 
@@ -102,6 +102,32 @@ impl BricksFont {
             _ => None,
         }
     }
+
+    fn draw_char_in_area(
+        &self,
+        c: char,
+        x: u16,
+        y: u16,
+        area: Rect,
+        style: Style,
+        buf: &mut Buffer,
+    ) {
+        if let Some(matrix) = Self::get_char_matrix(c) {
+            let mut start = Point(x, y);
+            for row in matrix {
+                Self::draw_row(
+                    start,
+                    row,
+                    self.size,
+                    style,
+                    area.right(),
+                    area.bottom(),
+                    buf,
+                );
+                start.1 += self.size;
+            }
+        }
+    }
 }
 
 impl Font for BricksFont {
@@ -118,13 +144,38 @@ impl Font for BricksFont {
     }
 
     fn draw_char(&self, c: char, x: u16, y: u16, style: Style, buf: &mut Buffer) {
-        if let Some(matrix) = Self::get_char_matrix(c) {
-            let mut start = Point(x, y);
-            let area_right = buf.area.right();
-            let area_bottom = buf.area.bottom();
-            for row in matrix {
-                Self::draw_row(start, row, self.size, style, area_right, area_bottom, buf);
-                start.1 += self.size;
+        self.draw_char_in_area(c, x, y, buf.area, style, buf);
+    }
+
+    fn draw_str(&self, s: &str, area: Rect, style: Style, buf: &mut Buffer) {
+        let mut x = area.x;
+        let y = area.y;
+        let spacing = 2;
+        for c in s.chars() {
+            if x + self.get_char_width() > area.right() {
+                break;
+            }
+            self.draw_char_in_area(c, x, y, area, style, buf);
+            x += self.get_char_width() + spacing;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn draw_str_respects_render_area_right_edge() {
+        let font = BricksFont::new(2);
+        let area = Rect::new(1, 0, 28, 10);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 40, 10));
+
+        font.draw_str("99", area, Style::default(), &mut buf);
+
+        for y in area.top()..area.bottom() {
+            for x in area.right()..buf.area.right() {
+                assert_eq!(buf.get(x, y).symbol(), " ");
             }
         }
     }
