@@ -15,7 +15,7 @@ pub trait Font {
                 let x = x + point.0;
                 let y = y + point.1;
                 if x < buf.area.right() && y < buf.area.bottom() {
-                    buf.get_mut(x, y).set_style(style);
+                    buf[(x, y)].set_style(style);
                 }
             }
         }

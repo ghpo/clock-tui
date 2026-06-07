@@ -130,7 +130,7 @@ impl Widget for &Timer {
             // Fill the entire area with the flash color
             for y in area.top()..area.bottom() {
                 for x in area.left()..area.right() {
-                    buf.get_mut(x, y).set_style(flash_style);
+                    buf[(x, y)].set_style(flash_style);
                 }
             }
 

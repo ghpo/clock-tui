@@ -28,47 +28,47 @@ pub enum Mode {
     /// The clock mode displays the current time, the default mode.
     Clock {
         /// Custome timezone, for example "America/New_York", use local timezone if not specificed
-        #[clap(short = 'z', long, value_parser=parse_timezone)]
+        #[arg(short = 'z', long, value_parser = parse_timezone)]
         timezone: Option<Tz>,
         /// Do not show date
-        #[clap(short = 'D', long, action)]
+        #[arg(short = 'D', long, action)]
         no_date: bool,
         /// Do not show seconds
-        #[clap(short = 'S', long, action)]
+        #[arg(short = 'S', long, action)]
         no_seconds: bool,
         /// Show milliseconds
-        #[clap(short, long, action)]
+        #[arg(short, long, action)]
         millis: bool,
     },
     /// The timer mode displays the remaining time until the timer is finished.
     Timer {
         /// Initial duration for timer, value can be 10s for 10 seconds, 1m for 1 minute, etc.
         /// Also accept mulitple duration value and run the timers sequentially, eg. 25m 5m
-        #[clap(short, long="duration", value_parser = parse_duration, num_args = 1.., default_value = "5m")]
+        #[arg(short, long = "duration", value_parser = parse_duration, num_args = 1.., default_value = "5m")]
         durations: Vec<Duration>,
 
         /// Set the title for the timer, also accept mulitple titles for each durations correspondingly
-        #[clap(short, long = "title", num_args = 0..)]
+        #[arg(short, long = "title", num_args = 0..)]
         titles: Vec<String>,
 
         /// Restart the timer when timer is over
-        #[clap(long, short, action)]
+        #[arg(long, short, action)]
         repeat: bool,
 
         /// Hide milliseconds
-        #[clap(long = "no-millis", short = 'M', action)]
+        #[arg(long = "no-millis", short = 'M', action)]
         no_millis: bool,
 
         /// Start the timer paused
-        #[clap(long = "paused", short = 'P', action)]
+        #[arg(long = "paused", short = 'P', action)]
         paused: bool,
 
         /// Auto quit when time is up
-        #[clap(long = "quit", short = 'Q', action)]
+        #[arg(long = "quit", short = 'Q', action)]
         auto_quit: bool,
 
         /// Command to run when the timer ends
-        #[clap(long, short, num_args = 1.., allow_hyphen_values = true)]
+        #[arg(long, short, num_args = 1.., allow_hyphen_values = true)]
         execute: Vec<String>,
     },
     /// The stopwatch mode displays the elapsed time since it was started.
@@ -76,23 +76,23 @@ pub enum Mode {
     /// The countdown timer mode shows the duration to a specific time
     Countdown {
         /// The target time to countdown to, eg. "2023-01-01", "20:00", "2022-12-25 20:00:00" or "2022-12-25T20:00:00-04:00"
-        #[clap(long, short, value_parser = parse_datetime)]
+        #[arg(long, short, value_parser = parse_datetime)]
         time: DateTime<Local>,
 
         /// Title or description for countdown show in header
-        #[clap(long, short = 'T')]
+        #[arg(long, short = 'T')]
         title: Option<String>,
 
         /// Continue to countdown after pass the target time
-        #[clap(long = "continue", short = 'c', action)]
+        #[arg(long = "continue", short = 'c', action)]
         continue_on_zero: bool,
 
         /// Reverse the countdown, a.k.a. countup
-        #[clap(long, short, action)]
+        #[arg(long, short, action)]
         reverse: bool,
 
         /// Show milliseconds
-        #[clap(short, long, action)]
+        #[arg(short, long, action)]
         millis: bool,
     },
 }
@@ -100,26 +100,26 @@ pub enum Mode {
 use crate::config::Config;
 
 #[derive(clap::Parser, Default)]
-#[clap(name = "tclock", about = "A clock app in terminal", long_about = None)]
+#[command(name = "tclock", about = "A clock app in terminal", long_about = None)]
 pub struct App {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub mode: Option<Mode>,
     /// Foreground color of the clock, possible values are:
     ///     a) Any one of: Black, Red, Green, Yellow, Blue, Magenta, Cyan, Gray, DarkGray, LightRed, LightGreen, LightYellow, LightBlue, LightMagenta, LightCyan, White.
     ///     b) Hexadecimal color code: #RRGGBB.
-    #[clap(short, long, value_parser = parse_color)]
+    #[arg(short, long, value_parser = parse_color)]
     pub color: Option<Color>,
     /// Size of the clock, should be a positive integer (>=1).
-    #[clap(short, long, value_parser)]
+    #[arg(short, long, value_parser)]
     pub size: Option<u16>,
 
-    #[clap(skip)]
+    #[arg(skip)]
     clock: Option<Clock>,
-    #[clap(skip)]
+    #[arg(skip)]
     timer: Option<Timer>,
-    #[clap(skip)]
+    #[arg(skip)]
     stopwatch: Option<Stopwatch>,
-    #[clap(skip)]
+    #[arg(skip)]
     countdown: Option<Countdown>,
 }
 
@@ -286,13 +286,13 @@ impl App {
 
     pub fn ui(&self, f: &mut Frame) {
         if let Some(ref w) = self.clock {
-            f.render_widget(w, f.size());
+            f.render_widget(w, f.area());
         } else if let Some(ref w) = self.timer {
-            f.render_widget(w, f.size());
+            f.render_widget(w, f.area());
         } else if let Some(ref w) = self.stopwatch {
-            f.render_widget(w, f.size());
+            f.render_widget(w, f.area());
         } else if let Some(ref w) = self.countdown {
-            f.render_widget(w, f.size());
+            f.render_widget(w, f.area());
         }
     }
 
@@ -418,5 +418,5 @@ fn parse_datetime(s: &str) -> Result<DateTime<Local>, String> {
 }
 
 fn parse_timezone(s: &str) -> Result<Tz, String> {
-    s.parse()
+    s.parse::<Tz>().map_err(|error| error.to_string())
 }

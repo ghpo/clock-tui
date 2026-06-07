@@ -1,7 +1,8 @@
 [package]
 name = "clock-tui"
-version = "0.6.3"
+version = "0.6.4"
 edition = "2021"
+rust-version = "1.88"
 license = "MIT"
 description = "A clock app in terminal"
 homepage = "https://github.com/akitaonrails/clock-tui"
@@ -19,15 +20,15 @@ pkg-fmt = "tgz"
 bin-dir = "{ bin }{ binary-ext }"
 
 [dependencies]
-ratatui = "0.25.0"
-crossterm = "0.25"
+ratatui = "0.30.1"
+crossterm = "0.29"
 chrono = "0.4"
-chrono-tz = "0.8"
-clap = { version = "4.0", features = ["derive"] }
-regex = "1.7"
-toml = "0.7"
-serde = { version = "1.0", features = ["derive"] }
-dirs = "5.0"
+chrono-tz = "0.10"
+clap = { version = "4.6", features = ["derive"] }
+regex = "1"
+toml = "1.1"
+serde = { version = "1", features = ["derive"] }
+dirs = "6"
 
 [lib]
 name = "clock_tui"

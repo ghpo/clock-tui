@@ -175,7 +175,7 @@ mod tests {
 
         for y in area.top()..area.bottom() {
             for x in area.right()..buf.area.right() {
-                assert_eq!(buf.get(x, y).symbol(), " ");
+                assert_eq!(buf[(x, y)].symbol(), " ");
             }
         }
     }
