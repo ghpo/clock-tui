@@ -10,7 +10,7 @@ use ratatui::{
     widgets::Widget,
 };
 
-use super::clock_widget::{clock_size_for_area, ClockWidgets};
+use super::clock_widget::{clock_height_for_size, clock_size_for_area, ClockWidgets};
 use super::render_centered;
 
 pub(crate) struct Clock {
@@ -80,18 +80,49 @@ impl Widget for &Clock {
         if self.widgets.is_empty() {
             self.render_clock(area, buf, time_str, header, self.size);
         } else {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints(vec![Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(area);
-            let clock_area = chunks[0];
-            let widgets_area = chunks[1];
-            let size = clock_size_for_area(time_str.chars().count(), clock_area, header.is_some());
+            let layout = clock_widgets_layout(area, time_str.chars().count(), header.is_some());
 
-            self.render_clock(clock_area, buf, time_str, header, size);
+            self.render_clock(layout.clock_area, buf, time_str, header, layout.clock_size);
             self.widgets
-                .render(widgets_area, area, buf, Style::default());
+                .render(layout.widgets_area, area, buf, Style::default());
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ClockWidgetsLayout {
+    clock_area: Rect,
+    widgets_area: Rect,
+    clock_size: u16,
+}
+
+fn clock_widgets_layout(area: Rect, text_len: usize, has_header: bool) -> ClockWidgetsLayout {
+    let clock_height_budget = clock_height_budget(area.height);
+    let sizing_area = Rect {
+        height: clock_height_budget,
+        ..area
+    };
+    let clock_size = clock_size_for_area(text_len, sizing_area, has_header);
+    let clock_height = clock_height_for_size(clock_size, has_header)
+        .min(clock_height_budget)
+        .min(area.height);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(clock_height), Constraint::Min(0)])
+        .split(area);
+
+    ClockWidgetsLayout {
+        clock_area: chunks[0],
+        widgets_area: chunks[1],
+        clock_size,
+    }
+}
+
+fn clock_height_budget(area_height: u16) -> u16 {
+    if area_height == 0 {
+        0
+    } else {
+        (area_height / 2).max(1)
     }
 }
 
@@ -107,5 +138,46 @@ impl Clock {
         let font = BricksFont::new(size);
         let text = ClockText::new(time_str.to_string(), &font, self.style);
         render_centered(area, buf, &text, header, None);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn widgets_get_extra_height_when_width_limits_square_clock() {
+        let layout = clock_widgets_layout(Rect::new(0, 0, 80, 80), 8, true);
+
+        assert_eq!(layout.clock_size, 1);
+        assert_eq!(layout.clock_area.height, 9);
+        assert_eq!(layout.widgets_area.height, 71);
+    }
+
+    #[test]
+    fn wide_clock_height_is_capped_to_top_half() {
+        let layout = clock_widgets_layout(Rect::new(0, 0, 500, 50), 8, true);
+
+        assert_eq!(layout.clock_size, 4);
+        assert!(layout.clock_area.height <= 25);
+        assert_eq!(layout.clock_area.height, 24);
+        assert_eq!(layout.widgets_area.height, 26);
+    }
+
+    #[test]
+    fn clock_layout_leaves_vertical_breathing_without_header() {
+        let layout = clock_widgets_layout(Rect::new(0, 0, 500, 50), 8, false);
+
+        assert_eq!(layout.clock_size, 4);
+        assert_eq!(layout.clock_area.height, 22);
+        assert_eq!(layout.widgets_area.height, 28);
+    }
+
+    #[test]
+    fn clock_layout_handles_tiny_areas() {
+        let layout = clock_widgets_layout(Rect::new(0, 0, 10, 1), 8, true);
+
+        assert_eq!(layout.clock_area.height, 1);
+        assert_eq!(layout.widgets_area.height, 0);
     }
 }

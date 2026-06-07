@@ -558,11 +558,25 @@ pub(crate) fn clock_size_for_area(text_len: usize, area: Rect, has_header: bool)
     let width_budget = area.width.saturating_sub(spacing + horizontal_margin) as usize;
     let width_size = width_budget / (6 * text_len);
 
-    let header_rows = if has_header { 4 } else { 0 };
-    let height_budget = area.height.saturating_sub(header_rows) as usize;
+    let height_budget = area
+        .height
+        .saturating_sub(clock_vertical_padding(has_header)) as usize;
     let height_size = height_budget / 5;
 
     width_size.min(height_size).max(1) as u16
+}
+
+pub(crate) fn clock_height_for_size(size: u16, has_header: bool) -> u16 {
+    size.saturating_mul(5)
+        .saturating_add(clock_vertical_padding(has_header))
+}
+
+fn clock_vertical_padding(has_header: bool) -> u16 {
+    if has_header {
+        4
+    } else {
+        2
+    }
 }
 
 #[cfg(test)]
@@ -589,10 +603,20 @@ mod tests {
         let area = Rect::new(0, 0, 80, 20);
         let size = clock_size_for_area(8, area, true);
         let width = 8 * (6 * size + 2) - 2;
-        let height = 5 * size + 4;
+        let height = clock_height_for_size(size, true);
 
         assert!(width <= area.width);
         assert!(height <= area.height);
+    }
+
+    #[test]
+    fn clock_size_leaves_vertical_breathing_without_header() {
+        let area = Rect::new(0, 0, 500, 25);
+        let size = clock_size_for_area(8, area, false);
+        let height = clock_height_for_size(size, false);
+
+        assert!(height <= area.height);
+        assert_eq!(size, 4);
     }
 
     #[test]
