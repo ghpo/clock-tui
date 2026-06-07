@@ -1,147 +1,196 @@
-# clock-tui (tclock)
+# clock-tui (`tclock`)
 
-A clock app in terminal. It support the following modes:
+![Clock mode with command widgets](./assets/screenshot-clock-widgets.png)
 
-## Clock
+`tclock` is a terminal clock app with clock, timer, stopwatch, and countdown modes.
 
-![clock](./assets/demo-clock-mode.gif)
-
-## Timer
-
-![timer](./assets/demo-timer-mode.gif)
-
-## Stopwatch
-
-![stopwatch](./assets/demo-stopwatch-mode.gif)
-
-## Countdown
-
-![countdown](./assets/demo-countdown-mode.gif)
-
-# Usage
+This repository is a maintained fork of the original [`race604/clock-tui`](https://github.com/race604/clock-tui). The original project appears to have been paused for a long time, so this fork keeps the core idea and modernizes it with updated Rust dependencies, GitHub release binaries, AUR packaging, and clock-mode command widgets.
 
 ## Install
 
-Install executable by `cargo`:
+### Arch Linux / AUR
+
+The recommended install method on Arch Linux is the prebuilt AUR package from this fork:
 
 ```shell
-$ cargo install clock-tui
+yay -S clock-tui-bin
 ```
 
-On Arch Linux, install from AUR:
+### GitHub Releases
+
+Prebuilt Linux binaries are published for `x86_64` and `aarch64`:
+
+<https://github.com/akitaonrails/clock-tui/releases>
+
+Download the tarball for your architecture and put `tclock` somewhere in your `PATH`.
+
+### Build from source
+
+To install this fork directly from GitHub:
 
 ```shell
-$ yay -S clock-tui-bin  # prebuilt binary from this fork
+cargo install --git https://github.com/akitaonrails/clock-tui --package clock-tui
 ```
+
+To build a local checkout:
+
+```shell
+cargo build --release
+```
+
+The binary will be at `target/release/tclock`.
 
 ## Basic usage
 
 ```shell
-$ tclock
+tclock
 ```
-Run this command to start a clock, and press `q` to exit.
 
-You can always use `-h` or `--help` to show help message, for exmaple
+Press `q` to exit. In the main loop, press `c`, `w`, or `t` to switch to clock, stopwatch, or timer mode. Press `Space` to pause/resume modes that support pausing.
+
+Use `--help` for all options:
 
 ```shell
-$ tclock --help
-
-# or
-$ tclock clock -h
+tclock --help
+tclock clock --help
+tclock timer --help
 ```
 
-## Clock mode, this it the default mode
+## Modes
+
+### Clock
 
 ```shell
-$ tclock clock
+tclock clock
 
-# Or just run
-$ tclock
+# The clock is also the default mode:
+tclock
 ```
 
-For more details, run `tclock clock -h` to show usage.
+![clock](./assets/demo-clock-mode.gif)
 
-## Run timer
+Clock options include timezone, seconds, milliseconds, date visibility, color, and size:
 
 ```shell
-# Start timer for 5 minutes
-$ tclock timer -d 5m
+tclock clock --timezone America/New_York
+tclock clock --no-seconds
+tclock --color '#e63946'
+tclock --size 2
 ```
 
-The option `-d` or `--duration` to set time, for example `100s`, `5m`, `1h`, etc.
-
-You can press `Space` key to _pause_ and _resume_ the timer.
-
-The timer mode also accept additional command to run when the timer ends, for example:
-
-```
-tclock timer -d 25m -e terminal-notifier -title tclock -message "'Time is up!'"
-```
-
-Here we use [terminal-notifier](https://github.com/julienXX/terminal-notifier) to fire a notification when time is up.
-
-For more details, run `tclock timer -h` to show usage.
-
-## Run stopwatch
+### Timer
 
 ```shell
-$ tclock stopwatch
+# Start a 5-minute timer
+tclock timer --duration 5m
 ```
 
-For more details, run `tclock stopwatch -h` to show usage.
-
-## Run countdown
+Durations can use suffixes such as `s`, `m`, and `h`. Timer mode can run several durations sequentially and can execute a command when time is up:
 
 ```shell
-$ tclock countdown --time 2023-01-01 --title 'New Year 2023'`
+tclock timer --duration 25m 5m --title Focus Break
+tclock timer --duration 25m --execute terminal-notifier -title tclock -message "Time is up!"
 ```
 
-You can use `-t` or `--time` to specify time, for example: `2023-01-01`, `20:00`, `'2022-12-25 20:00:00'` or `2022-12-25T20:00:00-04:00`.
+![timer](./assets/demo-timer-mode.gif)
 
-You can use `-r` or `--reverse` to run in count-up mode, it counts up duration since the specific time.
-
-For more details, run `tclock countdown -h` to show usage.
-
-## Customize style
-
-You can customize the styles.
-
-### Size
-
-You can use `-s` or `--size` option to custome clock size, for example:
+### Stopwatch
 
 ```shell
-$ tclock -s 2
+tclock stopwatch
 ```
 
-### Color
+![stopwatch](./assets/demo-stopwatch-mode.gif)
 
-You can use `-c` or `--color` to set clock forground color, for exmaple:
+### Countdown
 
 ```shell
-# color name, any one of: 
-# Black, Red, Green, Yellow, Blue, Magenta, Cyan, Gray, DarkGray, LightRed,
-# LightGreen, LightYellow, LightBlue, LightMagenta, LightCyan, White
-$ tclock -c yellow
-
-# or hex color
-$ tclock -c '#e63946'
+tclock countdown --time 2026-01-01 --title 'New Year 2026'
 ```
+
+`--time` accepts values such as `2026-01-01`, `20:00`, `2026-12-25 20:00:00`, or `2026-12-25T20:00:00-04:00`.
+
+![countdown](./assets/demo-countdown-mode.gif)
 
 ## Configuration
 
-`tclock` reads config from the XDG config path: `$XDG_CONFIG_HOME/tclock/config.toml`, usually `~/.config/tclock/config.toml`.
+`tclock` reads config from the XDG config path:
 
-Clock mode can show command widgets in the bottom half of the terminal. Each widget refreshes independently; `refresh_secs` defaults to 900 seconds and `timeout_secs` defaults to 30 seconds. String commands are executable paths; use array form for arguments or shell commands.
+```text
+$XDG_CONFIG_HOME/tclock/config.toml
+```
+
+That is usually:
+
+```text
+~/.config/tclock/config.toml
+```
+
+Missing config is ignored. Invalid TOML prints an error and falls back to defaults.
+
+Example:
+
+```toml
+[default]
+mode = "clock"
+color = "green"
+size = 1
+
+[clock]
+show_date = true
+show_seconds = true
+show_millis = false
+timezone = "America/Sao_Paulo"
+
+[timer]
+durations = ["25m", "5m"]
+titles = ["Focus", "Break"]
+repeat = false
+show_millis = true
+start_paused = false
+auto_quit = false
+```
+
+## Clock widgets
+
+Clock mode can display command widgets below the clock. A widget runs a command, captures its output, renders ANSI colors/styles, and refreshes independently.
+
+Widgets are useful for small status panels: GitHub pending work, calendars, system stats, reminders, CI state, or any command that prints useful text and exits.
+
+The clock automatically sizes itself into the top area when widgets are configured, and the bottom area shows up to 2 widgets on square-ish terminals, 4 on wide terminals, and 6 on ultra-wide terminals.
+
+Each widget supports:
+
+- `title`: optional display title
+- `command`: executable string, or array form with arguments
+- `refresh_secs`: refresh interval, default `900`
+- `timeout_secs`: command timeout, default `30`
+
+### Screenshot example
+
+The screenshot at the top uses the current local config from this fork, with two widget commands:
+
+- [`ghpending`](https://github.com/akitaonrails/ghpending) for GitHub pending tasks
+- [`google-calendar-tui`](https://github.com/akitaonrails/google-calendar-tui) for Google Calendar agenda output
 
 ```toml
 [clock]
 show_date = true
 
 [[clock.widgets]]
-title = "Pending"
+title = "GitHub pending"
 command = "ghpending"
+refresh_secs = 900
 
+[[clock.widgets]]
+title = "Google Calendar"
+command = "google-calendar-tui"
+refresh_secs = 3600
+```
+
+Array commands are supported when you need arguments or a shell wrapper:
+
+```toml
 [[clock.widgets]]
 title = "GPU"
 command = ["nvidia-smi"]
@@ -152,8 +201,12 @@ title = "Shell command"
 command = ["sh", "-c", "printf 'hello from a widget'"]
 ```
 
-With widgets enabled, the clock auto-sizes into the top half. The bottom half shows up to 2 widgets on square-ish terminals, 4 on widescreen terminals, and 6 on ultra-wide terminals.
+Widget commands should be finite stdout-producing commands that exit. Long-running alternate-screen TUIs are not a good fit unless they also provide a command or flag that prints a snapshot and exits.
 
-# License
+## Credits
 
-MIT License, refer to [LICENSE](./LICENSE) for detail.
+Original project and core app by [Race604](https://github.com/race604). This fork keeps the original MIT license and continues the project with maintenance, packaging, and widget features.
+
+## License
+
+MIT License. See [LICENSE](./LICENSE).
