@@ -134,6 +134,11 @@ impl App {
         let config = Config::load();
         let default_config = config.as_ref().map(|c| &c.default);
 
+        self.clock = None;
+        self.timer = None;
+        self.stopwatch = None;
+        self.countdown = None;
+
         // default mode
         if self.mode.is_none() {
             self.mode = default_config.map(|c| match c.mode.as_str() {
@@ -211,14 +216,15 @@ impl App {
                 timezone,
             } => {
                 let clock_config = config.as_ref().map(|c| &c.clock);
-                self.clock = Some(Clock {
+                self.clock = Some(Clock::new(
                     size,
                     style,
-                    show_date: !no_date && clock_config.map(|c| c.show_date).unwrap_or(true),
-                    show_millis: *millis || clock_config.map(|c| c.show_millis).unwrap_or(false),
-                    show_secs: !no_seconds && clock_config.map(|c| c.show_seconds).unwrap_or(true),
-                    timezone: timezone.or_else(|| clock_config.and_then(|c| c.timezone)),
-                });
+                    !no_date && clock_config.map(|c| c.show_date).unwrap_or(true),
+                    *millis || clock_config.map(|c| c.show_millis).unwrap_or(false),
+                    !no_seconds && clock_config.map(|c| c.show_seconds).unwrap_or(true),
+                    timezone.or_else(|| clock_config.and_then(|c| c.timezone)),
+                    clock_config.map(|c| c.widgets.clone()).unwrap_or_default(),
+                ));
             }
             Mode::Timer {
                 durations,
@@ -287,6 +293,12 @@ impl App {
             f.render_widget(w, f.size());
         } else if let Some(ref w) = self.countdown {
             f.render_widget(w, f.size());
+        }
+    }
+
+    pub fn tick(&mut self) {
+        if let Some(ref mut w) = self.clock {
+            w.tick();
         }
     }
 

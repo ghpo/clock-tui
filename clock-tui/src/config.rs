@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use chrono_tz::Tz;
 use serde::{Deserialize, Deserializer};
 
@@ -9,6 +11,23 @@ where
     match s {
         Some(s) => s.parse().map(Some).map_err(serde::de::Error::custom),
         None => Ok(None),
+    }
+}
+
+fn deserialize_widget_command<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum CommandValue {
+        Program(String),
+        Args(Vec<String>),
+    }
+
+    match CommandValue::deserialize(deserializer)? {
+        CommandValue::Program(program) => Ok(vec![program]),
+        CommandValue::Args(args) => Ok(args),
     }
 }
 
@@ -46,6 +65,20 @@ pub struct ClockConfig {
     pub show_millis: bool,
     #[serde(default, deserialize_with = "deserialize_timezone")]
     pub timezone: Option<Tz>,
+    #[serde(default)]
+    pub widgets: Vec<ClockWidgetConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClockWidgetConfig {
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_widget_command")]
+    pub command: Vec<String>,
+    #[serde(default = "default_widget_refresh_secs")]
+    pub refresh_secs: u64,
+    #[serde(default = "default_widget_timeout_secs")]
+    pub timeout_secs: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -100,6 +133,7 @@ impl Default for ClockConfig {
             show_seconds: default_true(),
             show_millis: default_false(),
             timezone: None,
+            widgets: Vec::new(),
         }
     }
 }
@@ -160,19 +194,31 @@ fn default_timer_durations() -> Vec<String> {
     vec!["25m".to_string(), "5m".to_string()]
 }
 
-impl Config {
-    pub fn load() -> Option<Self> {
-        // ~/.config/tclock/config.toml
-        let config_path = dirs::home_dir()?
-            .join(".config")
-            .join("tclock")
-            .join("config.toml");
+fn default_widget_refresh_secs() -> u64 {
+    15 * 60
+}
 
-        if !config_path.exists() {
+fn default_widget_timeout_secs() -> u64 {
+    30
+}
+
+impl Config {
+    pub fn config_path() -> Option<PathBuf> {
+        dirs::config_dir().map(|dir| dir.join("tclock").join("config.toml"))
+    }
+
+    pub fn load() -> Option<Self> {
+        let config_path = Self::config_path()?;
+        Self::load_from_path(config_path)
+    }
+
+    pub fn load_from_path(path: impl AsRef<Path>) -> Option<Self> {
+        let path = path.as_ref();
+        if !path.exists() {
             return None;
         };
 
-        let content = std::fs::read_to_string(config_path).ok()?;
+        let content = std::fs::read_to_string(path).ok()?;
         match toml::from_str(&content) {
             Ok(config) => Some(config),
             Err(e) => {
@@ -180,5 +226,48 @@ impl Config {
                 None
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clock_widget_defaults_and_string_command_parse() {
+        let config: Config = toml::from_str(
+            r#"
+            [clock]
+            [[clock.widgets]]
+            title = "Pending"
+            command = "ghpending"
+            "#,
+        )
+        .unwrap();
+
+        let widget = &config.clock.widgets[0];
+        assert_eq!(widget.title.as_deref(), Some("Pending"));
+        assert_eq!(widget.command, vec!["ghpending"]);
+        assert_eq!(widget.refresh_secs, 15 * 60);
+        assert_eq!(widget.timeout_secs, 30);
+    }
+
+    #[test]
+    fn clock_widget_arg_command_parse() {
+        let config: Config = toml::from_str(
+            r#"
+            [clock]
+            [[clock.widgets]]
+            command = ["sh", "-c", "printf ok"]
+            refresh_secs = 5
+            timeout_secs = 2
+            "#,
+        )
+        .unwrap();
+
+        let widget = &config.clock.widgets[0];
+        assert_eq!(widget.command, vec!["sh", "-c", "printf ok"]);
+        assert_eq!(widget.refresh_secs, 5);
+        assert_eq!(widget.timeout_secs, 2);
     }
 }

@@ -122,6 +122,32 @@ $ tclock -c yellow
 $ tclock -c '#e63946'
 ```
 
+## Configuration
+
+`tclock` reads config from the XDG config path: `$XDG_CONFIG_HOME/tclock/config.toml`, usually `~/.config/tclock/config.toml`.
+
+Clock mode can show command widgets in the bottom half of the terminal. Each widget refreshes independently; `refresh_secs` defaults to 900 seconds and `timeout_secs` defaults to 30 seconds. String commands are executable paths; use array form for arguments or shell commands.
+
+```toml
+[clock]
+show_date = true
+
+[[clock.widgets]]
+title = "Pending"
+command = "ghpending"
+
+[[clock.widgets]]
+title = "GPU"
+command = ["nvidia-smi"]
+refresh_secs = 60
+
+[[clock.widgets]]
+title = "Shell command"
+command = ["sh", "-c", "printf 'hello from a widget'"]
+```
+
+With widgets enabled, the clock auto-sizes into the top half. The bottom half shows up to 2 widgets on square-ish terminals, 4 on widescreen terminals, and 6 on ultra-wide terminals.
+
 # License
 
 MIT License, refer to [LICENSE](./LICENSE) for detail.

@@ -1,4 +1,5 @@
 mod clock;
+mod clock_widget;
 mod countdown;
 mod pause;
 mod stopwatch;

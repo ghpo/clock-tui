@@ -31,6 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if app.is_ended() {
             break;
         }
+        app.tick();
         terminal.draw(|f| app.ui(f))?;
 
         if event::poll(Duration::from_millis(250))? {
