@@ -1,5 +1,4 @@
 use std::{
-    cell::Cell,
     io::Read,
     process::{Child, Command, Stdio},
     sync::{
@@ -49,7 +48,9 @@ pub(crate) struct ClockWidgets {
     tx: Sender<WidgetMessage>,
     rx: Receiver<WidgetMessage>,
     cancel: Arc<AtomicBool>,
-    visible_count: Cell<usize>,
+    visible_count: usize,
+    viewports: Vec<Rect>,
+    active_widget: Option<usize>,
 }
 
 struct ClockWidget {
@@ -59,6 +60,7 @@ struct ClockWidget {
     timeout: Duration,
     output: String,
     running: bool,
+    scroll: u16,
     next_run: Instant,
     handle: Option<JoinHandle<()>>,
 }
@@ -83,6 +85,7 @@ impl ClockWidgets {
                 timeout: duration_or_default(config.timeout_secs, DEFAULT_TIMEOUT),
                 output: "Loading...".to_string(),
                 running: false,
+                scroll: 0,
                 next_run: now,
                 handle: None,
             })
@@ -93,7 +96,9 @@ impl ClockWidgets {
             tx,
             rx,
             cancel,
-            visible_count: Cell::new(0),
+            visible_count: 0,
+            viewports: Vec::new(),
+            active_widget: None,
         }
     }
 
@@ -108,6 +113,7 @@ impl ClockWidgets {
         while let Ok(message) = self.rx.try_recv() {
             if let Some(widget) = self.widgets.get_mut(message.index) {
                 widget.output = message.output;
+                widget.clamp_scroll_to_output();
                 widget.running = false;
                 widget.next_run = now + widget.refresh;
                 if let Some(handle) = widget.handle.take() {
@@ -120,7 +126,7 @@ impl ClockWidgets {
             let _ = handle.join();
         }
 
-        let visible_count = self.visible_count.get().min(self.widgets.len());
+        let visible_count = self.visible_count.min(self.widgets.len());
         for (index, widget) in self.widgets.iter_mut().enumerate().take(visible_count) {
             if widget.running || now < widget.next_run {
                 continue;
@@ -139,9 +145,16 @@ impl ClockWidgets {
         }
     }
 
-    pub(crate) fn render(&self, area: Rect, terminal_area: Rect, buf: &mut Buffer, style: Style) {
+    pub(crate) fn render(
+        &mut self,
+        area: Rect,
+        terminal_area: Rect,
+        buf: &mut Buffer,
+        style: Style,
+    ) {
         let count = visible_widget_count(terminal_area, self.widgets.len());
-        self.visible_count.set(count);
+        self.visible_count = count;
+        self.viewports.clear();
         if count == 0 {
             return;
         }
@@ -154,9 +167,45 @@ impl ClockWidgets {
             .constraints(constraints)
             .split(area);
 
-        for (widget, area) in self.widgets.iter().take(count).zip(chunks.iter()) {
-            widget.render(*area, buf, style);
+        for (widget, area) in self.widgets.iter_mut().take(count).zip(chunks.iter()) {
+            let viewport = padded_widget_area(*area);
+            self.viewports.push(viewport);
+            widget.render(viewport, buf, style);
         }
+    }
+
+    pub(crate) fn scroll_at(&mut self, column: u16, row: u16, delta: i16) {
+        if let Some(index) = self.hit_test(column, row) {
+            self.active_widget = Some(index);
+            if let Some(widget) = self.widgets.get_mut(index) {
+                widget.scroll_by(delta);
+            }
+        }
+    }
+
+    pub(crate) fn scroll_active_to_top(&mut self) {
+        if let Some(widget) = self
+            .active_widget
+            .and_then(|index| self.widgets.get_mut(index))
+        {
+            widget.scroll = 0;
+        }
+    }
+
+    pub(crate) fn scroll_active_to_bottom(&mut self) {
+        if let Some(index) = self.active_widget {
+            if let (Some(widget), Some(area)) =
+                (self.widgets.get_mut(index), self.viewports.get(index))
+            {
+                widget.scroll = widget.max_scroll(*area);
+            }
+        }
+    }
+
+    fn hit_test(&self, column: u16, row: u16) -> Option<usize> {
+        self.viewports
+            .iter()
+            .position(|area| rect_contains(*area, column, row))
     }
 }
 
@@ -172,19 +221,60 @@ impl Drop for ClockWidgets {
 }
 
 impl ClockWidget {
-    fn render(&self, area: Rect, buf: &mut Buffer, style: Style) {
-        let area = padded_widget_area(area);
-        let title = self
-            .title
-            .clone()
-            .or_else(|| self.command.first().cloned())
-            .unwrap_or_else(|| "widget".to_string());
+    fn render(&mut self, area: Rect, buf: &mut Buffer, style: Style) {
+        self.clamp_scroll(area);
+        let title = self.title();
         let paragraph = Paragraph::new(widget_text(&title, &self.output, style))
             .style(style)
+            .scroll((self.scroll, 0))
             .wrap(Wrap { trim: false });
 
         paragraph.render(area, buf);
     }
+
+    fn scroll_by(&mut self, delta: i16) {
+        if delta.is_negative() {
+            self.scroll = self.scroll.saturating_sub(delta.unsigned_abs());
+        } else {
+            self.scroll = self.scroll.saturating_add(delta as u16);
+        }
+    }
+
+    fn clamp_scroll(&mut self, area: Rect) {
+        self.scroll = self.scroll.min(self.max_scroll(area));
+    }
+
+    fn clamp_scroll_to_output(&mut self) {
+        let line_count = widget_text_height(&self.title(), &self.output, 1);
+        self.scroll = self.scroll.min(line_count.saturating_sub(1));
+    }
+
+    fn max_scroll(&self, area: Rect) -> u16 {
+        widget_text_height(&self.title(), &self.output, area.width).saturating_sub(area.height)
+    }
+
+    fn title(&self) -> String {
+        self.title
+            .clone()
+            .or_else(|| self.command.first().cloned())
+            .unwrap_or_else(|| "widget".to_string())
+    }
+}
+
+fn rect_contains(area: Rect, column: u16, row: u16) -> bool {
+    column >= area.x
+        && column < area.x.saturating_add(area.width)
+        && row >= area.y
+        && row < area.y.saturating_add(area.height)
+}
+
+fn widget_text_height(title: &str, output: &str, width: u16) -> u16 {
+    let width = width.max(1) as usize;
+    widget_text(title, output, Style::default())
+        .lines
+        .iter()
+        .map(|line| line.width().max(1).div_ceil(width) as u16)
+        .sum()
 }
 
 fn padded_widget_area(area: Rect) -> Rect {
@@ -634,6 +724,60 @@ mod tests {
     }
 
     #[test]
+    fn widget_hit_testing_uses_last_rendered_viewports() {
+        let mut widgets = ClockWidgets::new(vec![widget_config("one"), widget_config("two")]);
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 40, 10));
+
+        widgets.render(
+            Rect::new(0, 2, 40, 8),
+            Rect::new(0, 0, 40, 10),
+            &mut buffer,
+            Style::default(),
+        );
+
+        assert_eq!(widgets.viewports.len(), 2);
+        assert_eq!(widgets.hit_test(1, 3), Some(0));
+        assert_eq!(widgets.hit_test(21, 3), Some(1));
+        assert_eq!(widgets.hit_test(0, 0), None);
+    }
+
+    #[test]
+    fn widget_scroll_clamps_and_home_end_target_active_widget() {
+        let mut widgets = ClockWidgets::new(vec![widget_config("one"), widget_config("two")]);
+        widgets.widgets[0].output = numbered_lines(20);
+        widgets.widgets[1].output = numbered_lines(20);
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 40, 8));
+        widgets.render(
+            Rect::new(0, 0, 40, 8),
+            Rect::new(0, 0, 40, 8),
+            &mut buffer,
+            Style::default(),
+        );
+
+        widgets.scroll_at(1, 1, 50);
+        widgets.render(
+            Rect::new(0, 0, 40, 8),
+            Rect::new(0, 0, 40, 8),
+            &mut buffer,
+            Style::default(),
+        );
+        assert_eq!(widgets.active_widget, Some(0));
+        assert_eq!(
+            widgets.widgets[0].scroll,
+            widgets.widgets[0].max_scroll(widgets.viewports[0])
+        );
+        assert_eq!(widgets.widgets[1].scroll, 0);
+
+        widgets.scroll_active_to_top();
+        assert_eq!(widgets.widgets[0].scroll, 0);
+        widgets.scroll_active_to_bottom();
+        assert_eq!(
+            widgets.widgets[0].scroll,
+            widgets.widgets[0].max_scroll(widgets.viewports[0])
+        );
+    }
+
+    #[test]
     fn clock_size_fits_width_and_height() {
         let area = Rect::new(0, 0, 80, 20);
         let size = clock_size_for_area(8, area, true);
@@ -643,6 +787,22 @@ mod tests {
 
         assert!(width <= area.width);
         assert!(height <= area.height);
+    }
+
+    fn widget_config(title: &str) -> ClockWidgetConfig {
+        ClockWidgetConfig {
+            title: Some(title.to_string()),
+            command: vec![title.to_string()],
+            refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
+            timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
+        }
+    }
+
+    fn numbered_lines(count: usize) -> String {
+        (0..count)
+            .map(|index| format!("line {index}"))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[test]

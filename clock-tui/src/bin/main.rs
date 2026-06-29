@@ -6,7 +6,9 @@ use clap::Parser;
 use clock_tui::app::App;
 use clock_tui::app::Mode;
 use crossterm::cursor::Show;
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, MouseEventKind,
+};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::ExecutableCommand;
@@ -22,6 +24,11 @@ impl TerminalSession {
             let _ = disable_raw_mode();
             return Err(Box::new(error));
         }
+        if let Err(error) = io::stdout().execute(EnableMouseCapture) {
+            let _ = io::stdout().execute(LeaveAlternateScreen);
+            let _ = disable_raw_mode();
+            return Err(Box::new(error));
+        }
         Ok(Self)
     }
 }
@@ -29,6 +36,7 @@ impl TerminalSession {
 impl Drop for TerminalSession {
     fn drop(&mut self) {
         let _ = io::stdout().execute(Show);
+        let _ = io::stdout().execute(DisableMouseCapture);
         let _ = disable_raw_mode();
         let _ = io::stdout().execute(LeaveAlternateScreen);
     }
@@ -55,8 +63,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         terminal.draw(|f| app.ui(f))?;
 
         if event::poll(Duration::from_millis(250))? {
-            if let Event::Key(key) = event::read()? {
-                match key.code {
+            match event::read()? {
+                Event::Key(key) => match key.code {
                     KeyCode::Char('q') => break,
                     KeyCode::Char(' ') => app.on_key(KeyCode::Char(' ')),
                     KeyCode::Char('c') => app.set_mode(Mode::Clock {
@@ -75,8 +83,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                         auto_quit: false,
                         execute: vec![],
                     }),
+                    KeyCode::Home | KeyCode::End => app.on_key(key.code),
                     _ => {}
-                }
+                },
+                Event::Mouse(mouse) => match mouse.kind {
+                    MouseEventKind::ScrollDown => app.on_mouse_scroll(mouse.column, mouse.row, 1),
+                    MouseEventKind::ScrollUp => app.on_mouse_scroll(mouse.column, mouse.row, -1),
+                    _ => {}
+                },
+                _ => {}
             }
         }
     }

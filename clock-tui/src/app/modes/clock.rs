@@ -7,7 +7,6 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
-    widgets::Widget,
 };
 
 use super::clock_widget::{clock_height_for_size, clock_size_for_area, ClockWidgets};
@@ -48,10 +47,20 @@ impl Clock {
     pub(crate) fn tick(&mut self) {
         self.widgets.tick();
     }
-}
 
-impl Widget for &Clock {
-    fn render(self, area: Rect, buf: &mut Buffer) {
+    pub(crate) fn scroll_widget_at(&mut self, column: u16, row: u16, delta: i16) {
+        self.widgets.scroll_at(column, row, delta);
+    }
+
+    pub(crate) fn scroll_active_widget_to_top(&mut self) {
+        self.widgets.scroll_active_to_top();
+    }
+
+    pub(crate) fn scroll_active_widget_to_bottom(&mut self) {
+        self.widgets.scroll_active_to_bottom();
+    }
+
+    pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer) {
         let now = if let Some(ref tz) = self.timezone {
             Utc::now().with_timezone(tz).naive_local()
         } else {

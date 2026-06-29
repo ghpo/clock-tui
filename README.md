@@ -159,6 +159,8 @@ Widgets are useful for small status panels: GitHub pending work, calendars, syst
 
 The clock automatically sizes itself into the top area when widgets are configured, and the bottom area shows up to 2 widgets on square-ish terminals, 4 on wide terminals, and 6 on ultra-wide terminals.
 
+When a widget has more output than fits on screen, scroll it with the mouse wheel over that widget. `Home` and `End` jump the active widget to the top or bottom.
+
 Each widget supports:
 
 - `title`: optional display title

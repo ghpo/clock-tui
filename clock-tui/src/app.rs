@@ -289,9 +289,9 @@ impl App {
         }
     }
 
-    pub fn ui(&self, f: &mut Frame) {
-        if let Some(ref w) = self.clock {
-            f.render_widget(w, f.area());
+    pub fn ui(&mut self, f: &mut Frame) {
+        if let Some(ref mut w) = self.clock {
+            w.render(f.area(), f.buffer_mut());
         } else if let Some(ref w) = self.timer {
             f.render_widget(w, f.area());
         } else if let Some(ref w) = self.stopwatch {
@@ -308,11 +308,22 @@ impl App {
     }
 
     pub fn on_key(&mut self, key: KeyCode) {
-        if let Some(_w) = self.clock.as_mut() {
+        if let Some(w) = self.clock.as_mut() {
+            match key {
+                KeyCode::Home => w.scroll_active_widget_to_top(),
+                KeyCode::End => w.scroll_active_widget_to_bottom(),
+                _ => {}
+            }
         } else if let Some(w) = self.timer.as_mut() {
             handle_key(w, key);
         } else if let Some(w) = self.stopwatch.as_mut() {
             handle_key(w, key);
+        }
+    }
+
+    pub fn on_mouse_scroll(&mut self, column: u16, row: u16, delta: i16) {
+        if let Some(w) = self.clock.as_mut() {
+            w.scroll_widget_at(column, row, delta);
         }
     }
 
