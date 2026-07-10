@@ -72,6 +72,17 @@ pub struct ClockConfig {
     pub widgets: Vec<ClockWidgetConfig>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WidgetPosition {
+    /// Placed in the horizontal widget row below the clock (the default).
+    #[default]
+    Auto,
+    /// Placed in a full-width band at the bottom, beneath the widget row,
+    /// sized to fit the widget's output.
+    Bottom,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClockWidgetConfig {
     #[serde(default)]
@@ -82,6 +93,8 @@ pub struct ClockWidgetConfig {
     pub refresh_secs: u64,
     #[serde(default = "default_widget_timeout_secs")]
     pub timeout_secs: u64,
+    #[serde(default)]
+    pub position: WidgetPosition,
 }
 
 #[derive(Debug, Deserialize)]
@@ -235,6 +248,22 @@ mod tests {
         assert_eq!(widget.command, vec!["ghpending"]);
         assert_eq!(widget.refresh_secs, 15 * 60);
         assert_eq!(widget.timeout_secs, 30);
+        assert_eq!(widget.position, WidgetPosition::Auto);
+    }
+
+    #[test]
+    fn clock_widget_bottom_position_parse() {
+        let config: Config = toml::from_str(
+            r#"
+            [clock]
+            [[clock.widgets]]
+            command = "system-health"
+            position = "bottom"
+            "#,
+        )
+        .unwrap();
+
+        assert_eq!(config.clock.widgets[0].position, WidgetPosition::Bottom);
     }
 
     #[test]

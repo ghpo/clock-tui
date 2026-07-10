@@ -19,11 +19,12 @@ use ratatui::{
     widgets::{Paragraph, Widget, Wrap},
 };
 
-use crate::config::{ClockWidgetConfig, DEFAULT_WIDGET_REFRESH_SECS, DEFAULT_WIDGET_TIMEOUT_SECS};
+use crate::config::{
+    ClockWidgetConfig, WidgetPosition, DEFAULT_WIDGET_REFRESH_SECS, DEFAULT_WIDGET_TIMEOUT_SECS,
+};
 
 const DEFAULT_REFRESH: Duration = Duration::from_secs(DEFAULT_WIDGET_REFRESH_SECS);
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(DEFAULT_WIDGET_TIMEOUT_SECS);
-const MAX_WIDGETS: usize = 6;
 const SQUARE_TERMINAL_WIDGETS: usize = 2;
 const WIDE_TERMINAL_WIDGETS: usize = 4;
 const ULTRAWIDE_TERMINAL_WIDGETS: usize = 6;
@@ -42,13 +43,18 @@ const CLOCK_CHARACTER_SPACING: u16 = 2;
 const CLOCK_HORIZONTAL_MARGIN: u16 = 4;
 const CLOCK_HEADER_VERTICAL_PADDING: u16 = 4;
 const CLOCK_NO_HEADER_VERTICAL_PADDING: u16 = 2;
+// When bottom-positioned widgets coexist with the widget row, the row keeps at
+// least this many rows so the columns stay usable.
+const MIN_WIDGET_ROW_HEIGHT: u16 = 8;
+// A bottom widget that can't get at least this many rows is hidden instead of
+// rendering an unusable sliver.
+const MIN_BOTTOM_WIDGET_HEIGHT: u16 = 3;
 
 pub(crate) struct ClockWidgets {
     widgets: Vec<ClockWidget>,
     tx: Sender<WidgetMessage>,
     rx: Receiver<WidgetMessage>,
     cancel: Arc<AtomicBool>,
-    visible_count: usize,
     viewports: Vec<Rect>,
     active_widget: Option<usize>,
 }
@@ -58,8 +64,10 @@ struct ClockWidget {
     command: Vec<String>,
     refresh: Duration,
     timeout: Duration,
+    position: WidgetPosition,
     output: String,
     running: bool,
+    visible: bool,
     scroll: u16,
     next_run: Instant,
     handle: Option<JoinHandle<()>>,
@@ -77,14 +85,15 @@ impl ClockWidgets {
         let cancel = Arc::new(AtomicBool::new(false));
         let widgets = configs
             .into_iter()
-            .take(MAX_WIDGETS)
             .map(|config| ClockWidget {
                 title: config.title,
                 command: config.command,
                 refresh: duration_or_default(config.refresh_secs, DEFAULT_REFRESH),
                 timeout: duration_or_default(config.timeout_secs, DEFAULT_TIMEOUT),
+                position: config.position,
                 output: "Loading...".to_string(),
                 running: false,
+                visible: false,
                 scroll: 0,
                 next_run: now,
                 handle: None,
@@ -96,7 +105,6 @@ impl ClockWidgets {
             tx,
             rx,
             cancel,
-            visible_count: 0,
             viewports: Vec::new(),
             active_widget: None,
         }
@@ -126,9 +134,8 @@ impl ClockWidgets {
             let _ = handle.join();
         }
 
-        let visible_count = self.visible_count.min(self.widgets.len());
-        for (index, widget) in self.widgets.iter_mut().enumerate().take(visible_count) {
-            if widget.running || now < widget.next_run {
+        for (index, widget) in self.widgets.iter_mut().enumerate() {
+            if !widget.visible || widget.running || now < widget.next_run {
                 continue;
             }
 
@@ -152,24 +159,91 @@ impl ClockWidgets {
         buf: &mut Buffer,
         style: Style,
     ) {
-        let count = visible_widget_count(terminal_area, self.widgets.len());
-        self.visible_count = count;
-        self.viewports.clear();
-        if count == 0 {
+        self.viewports = vec![Rect::default(); self.widgets.len()];
+        for widget in &mut self.widgets {
+            widget.visible = false;
+        }
+        if area.height == 0 || area.width == 0 {
             return;
         }
 
-        let constraints = (0..count)
-            .map(|_| Constraint::Ratio(1, count as u32))
-            .collect::<Vec<_>>();
-        let chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(constraints)
-            .split(area);
+        let row_indices: Vec<usize> = self
+            .widgets
+            .iter()
+            .enumerate()
+            .filter(|(_, widget)| widget.position == WidgetPosition::Auto)
+            .map(|(index, _)| index)
+            .collect();
+        let bottom_indices: Vec<usize> = self
+            .widgets
+            .iter()
+            .enumerate()
+            .filter(|(_, widget)| widget.position == WidgetPosition::Bottom)
+            .map(|(index, _)| index)
+            .collect();
 
-        for (widget, area) in self.widgets.iter_mut().take(count).zip(chunks.iter()) {
-            let viewport = padded_widget_area(*area);
-            self.viewports.push(viewport);
+        let row_count = visible_widget_count(terminal_area, row_indices.len());
+
+        // Bottom band: full-width widgets stacked under the row, each just tall
+        // enough for its content. If a row is present it keeps a minimum height.
+        let bottom_budget = if row_count > 0 {
+            area.height.saturating_sub(MIN_WIDGET_ROW_HEIGHT)
+        } else {
+            area.height
+        };
+        let mut bottom_heights = Vec::new();
+        let mut bottom_total: u16 = 0;
+        for &index in &bottom_indices {
+            let widget = &self.widgets[index];
+            let needed = bottom_widget_height(&widget.title(), &widget.output, area.width);
+            let granted = needed.min(bottom_budget.saturating_sub(bottom_total));
+            if granted < MIN_BOTTOM_WIDGET_HEIGHT {
+                bottom_heights.push((index, 0));
+                continue;
+            }
+            bottom_heights.push((index, granted));
+            bottom_total = bottom_total.saturating_add(granted);
+        }
+
+        let row_area = Rect {
+            height: area.height - bottom_total,
+            ..area
+        };
+        let mut bottom_y = area.y + row_area.height;
+
+        if row_count > 0 && row_area.height > 0 {
+            let constraints = (0..row_count)
+                .map(|_| Constraint::Ratio(1, row_count as u32))
+                .collect::<Vec<_>>();
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(constraints)
+                .split(row_area);
+
+            for (&index, chunk) in row_indices.iter().take(row_count).zip(chunks.iter()) {
+                let viewport = padded_widget_area(*chunk);
+                self.viewports[index] = viewport;
+                let widget = &mut self.widgets[index];
+                widget.visible = true;
+                widget.render(viewport, buf, style);
+            }
+        }
+
+        for (index, height) in bottom_heights {
+            if height == 0 {
+                continue;
+            }
+            let band = Rect {
+                x: area.x,
+                y: bottom_y,
+                width: area.width,
+                height,
+            };
+            bottom_y = bottom_y.saturating_add(height);
+            let viewport = padded_widget_area(band);
+            self.viewports[index] = viewport;
+            let widget = &mut self.widgets[index];
+            widget.visible = true;
             widget.render(viewport, buf, style);
         }
     }
@@ -270,11 +344,23 @@ fn rect_contains(area: Rect, column: u16, row: u16) -> bool {
 
 fn widget_text_height(title: &str, output: &str, width: u16) -> u16 {
     let width = width.max(1) as usize;
-    widget_text(title, output, Style::default())
+    let total = widget_text(title, output, Style::default())
         .lines
         .iter()
-        .map(|line| line.width().max(1).div_ceil(width) as u16)
-        .sum()
+        .fold(0usize, |total, line| {
+            total.saturating_add(line.width().max(1).div_ceil(width))
+        });
+
+    total.min(u16::MAX as usize) as u16
+}
+
+/// Height a bottom-positioned widget needs to show its full output inside a
+/// full-width band: wrapped text height at the band's content width, plus the
+/// vertical padding `padded_widget_area` will trim.
+fn bottom_widget_height(title: &str, output: &str, band_width: u16) -> u16 {
+    let x_padding = u16::from(band_width > 2);
+    let content_width = band_width.saturating_sub(x_padding * 2).max(1);
+    widget_text_height(title, output, content_width).saturating_add(2)
 }
 
 fn padded_widget_area(area: Rect) -> Rect {
@@ -724,6 +810,109 @@ mod tests {
     }
 
     #[test]
+    fn bottom_widget_renders_full_width_under_the_row() {
+        let mut widgets = ClockWidgets::new(vec![
+            widget_config("one"),
+            widget_config("two"),
+            bottom_widget_config("health"),
+        ]);
+        widgets.widgets[2].output = numbered_lines(4);
+        let area = Rect::new(0, 2, 80, 38);
+        let terminal_area = Rect::new(0, 0, 80, 40);
+        let mut buffer = Buffer::empty(terminal_area);
+
+        widgets.render(area, terminal_area, &mut buffer, Style::default());
+
+        // row widgets side by side on top
+        assert!(widgets.widgets[0].visible);
+        assert!(widgets.widgets[1].visible);
+        assert_eq!(widgets.viewports[0].y, widgets.viewports[1].y);
+        assert!(widgets.viewports[1].x > widgets.viewports[0].x);
+
+        // bottom widget: full band width, below the row, sized to content
+        assert!(widgets.widgets[2].visible);
+        let bottom = widgets.viewports[2];
+        assert!(bottom.y > widgets.viewports[0].y);
+        // band width minus padding
+        assert_eq!(bottom.width, area.width - 2);
+        // title + 4 output lines
+        assert_eq!(bottom.height, 5);
+        // band ends at the bottom edge of the widget area
+        assert_eq!(bottom.y + bottom.height + 1, area.y + area.height);
+    }
+
+    #[test]
+    fn bottom_widgets_do_not_count_against_row_widget_limit() {
+        let mut configs = (0..ULTRAWIDE_TERMINAL_WIDGETS)
+            .map(|index| widget_config(&format!("row-{index}")))
+            .collect::<Vec<_>>();
+        configs.push(bottom_widget_config("health"));
+        let mut widgets = ClockWidgets::new(configs);
+        widgets.widgets[ULTRAWIDE_TERMINAL_WIDGETS].output = "ok".to_string();
+        let area = Rect::new(0, 0, 240, 50);
+        let mut buffer = Buffer::empty(area);
+
+        widgets.render(area, area, &mut buffer, Style::default());
+
+        assert_eq!(widgets.widgets.len(), ULTRAWIDE_TERMINAL_WIDGETS + 1);
+        assert!(widgets
+            .widgets
+            .iter()
+            .take(ULTRAWIDE_TERMINAL_WIDGETS)
+            .all(|widget| widget.visible));
+        assert!(widgets.widgets[ULTRAWIDE_TERMINAL_WIDGETS].visible);
+        assert!(widgets.viewports[ULTRAWIDE_TERMINAL_WIDGETS].y > widgets.viewports[0].y);
+    }
+
+    #[test]
+    fn bottom_widget_alone_takes_band_without_row() {
+        let mut widgets = ClockWidgets::new(vec![bottom_widget_config("health")]);
+        widgets.widgets[0].output = numbered_lines(3);
+        let area = Rect::new(0, 0, 60, 30);
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 60, 30));
+
+        widgets.render(area, area, &mut buffer, Style::default());
+
+        assert!(widgets.widgets[0].visible);
+        let viewport = widgets.viewports[0];
+        assert_eq!(viewport.height, 4); // title + 3 lines
+        assert_eq!(viewport.y + viewport.height + 1, area.height);
+    }
+
+    #[test]
+    fn bottom_widget_is_capped_by_min_row_height() {
+        let mut widgets =
+            ClockWidgets::new(vec![widget_config("one"), bottom_widget_config("health")]);
+        widgets.widgets[1].output = numbered_lines(100);
+        let area = Rect::new(0, 0, 80, 20);
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 20));
+
+        widgets.render(area, area, &mut buffer, Style::default());
+
+        // the row keeps its minimum height even with oversized bottom output
+        assert!(widgets.viewports[0].height >= MIN_WIDGET_ROW_HEIGHT - 2);
+        let bottom = widgets.viewports[1];
+        assert!(bottom.height <= area.height - MIN_WIDGET_ROW_HEIGHT);
+        assert!(widgets.widgets[1].visible);
+    }
+
+    #[test]
+    fn hidden_bottom_widget_does_not_run_or_hit_test() {
+        let mut widgets =
+            ClockWidgets::new(vec![widget_config("one"), bottom_widget_config("health")]);
+        widgets.widgets[1].output = numbered_lines(5);
+        // area too small to grant the bottom widget its minimum height
+        let area = Rect::new(0, 0, 40, 9);
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 40, 9));
+
+        widgets.render(area, area, &mut buffer, Style::default());
+
+        assert!(!widgets.widgets[1].visible);
+        assert_eq!(widgets.viewports[1], Rect::default());
+        assert_eq!(widgets.hit_test(5, 5), Some(0));
+    }
+
+    #[test]
     fn widget_hit_testing_uses_last_rendered_viewports() {
         let mut widgets = ClockWidgets::new(vec![widget_config("one"), widget_config("two")]);
         let mut buffer = Buffer::empty(Rect::new(0, 0, 40, 10));
@@ -778,6 +967,13 @@ mod tests {
     }
 
     #[test]
+    fn widget_text_height_saturates_for_large_wrapped_lines() {
+        let output = "x".repeat(u16::MAX as usize + 1);
+
+        assert_eq!(widget_text_height("huge", &output, 1), u16::MAX);
+    }
+
+    #[test]
     fn clock_size_fits_width_and_height() {
         let area = Rect::new(0, 0, 80, 20);
         let size = clock_size_for_area(8, area, true);
@@ -795,6 +991,14 @@ mod tests {
             command: vec![title.to_string()],
             refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
             timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
+            position: WidgetPosition::Auto,
+        }
+    }
+
+    fn bottom_widget_config(title: &str) -> ClockWidgetConfig {
+        ClockWidgetConfig {
+            position: WidgetPosition::Bottom,
+            ..widget_config(title)
         }
     }
 

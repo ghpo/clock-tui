@@ -159,6 +159,8 @@ Widgets are useful for small status panels: GitHub pending work, calendars, syst
 
 The clock automatically sizes itself into the top area when widgets are configured, and the bottom area shows up to 2 widgets on square-ish terminals, 4 on wide terminals, and 6 on ultra-wide terminals.
 
+Widgets with `position = "bottom"` are placed in a full-width band beneath the widget row instead, stacked in config order and each sized to exactly fit its output. The widget row keeps a minimum height when both are present, and a bottom widget that cannot get at least 3 rows is hidden rather than squeezed. Bottom widgets don't count against the per-row widget limits, so a status strip can coexist with a full row of columns.
+
 When a widget has more output than fits on screen, scroll it with the mouse wheel over that widget. `Home` and `End` jump the active widget to the top or bottom.
 
 Each widget supports:
@@ -167,6 +169,7 @@ Each widget supports:
 - `command`: executable string, or array form with arguments
 - `refresh_secs`: refresh interval, default `900`
 - `timeout_secs`: command timeout, default `30`
+- `position`: `"auto"` (default, widget row) or `"bottom"` (full-width band below the row, sized to content)
 
 ### Screenshot example
 
