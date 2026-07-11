@@ -53,7 +53,7 @@ export interface AppConfig {
   _version?: number;
 }
 
-export const DEFAULT_WIDGET_THEMES = ['default', 'nerv', 'retro'];
+export const DEFAULT_WIDGET_THEMES = ['default', 'nerv', 'evangelion'];
 export const DEFAULT_WIDGET_REFRESH_SECS = 15 * 60;
 export const DEFAULT_WIDGET_TIMEOUT_SECS = 30;
 
@@ -92,7 +92,7 @@ export function getDefaultConfig(): AppConfig {
           timeout_secs: 30,
         },
       ],
-      widget_themes: ['default', 'nerv', 'retro'],
+      widget_themes: ['default', 'nerv', 'evangelion'],
       widget_theme_index: 0,
     },
     timer: {
@@ -139,7 +139,7 @@ export function loadConfig(): AppConfig {
       }
       const result = deepMerge(getDefaultConfig(), parsed);
       // Always ensure widget_themes has the full 3 entries
-      result.clock.widget_themes = ['default', 'nerv', 'retro'];
+      result.clock.widget_themes = ['default', 'nerv', 'evangelion'];
       // Ensure index is valid for 3 themes
       if (result.clock.widget_theme_index < 0 || result.clock.widget_theme_index > 2) {
         result.clock.widget_theme_index = 0;

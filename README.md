@@ -1,6 +1,6 @@
 # tclock — Retro Terminal Clock (Web Edition)
 
-A retro-styled terminal clock TUI ported from **Rust** to the **web** with Next.js. Displays the time in a custom "bricks" bitmap font (6×5 matrix), with multiple modes (clock, timer, stopwatch, countdown), live widgets (system health, GitHub pending reviews, Google Calendar events), and a full CSS variable-based theme system with **3 built-in themes**.
+A retro-styled terminal clock TUI ported from **Rust** to the **web** with Next.js. Three built-in themes with a HAL 9000-inspired retro dashboard layout — big text clock, window manager-style tabs, columnar widgets, and hostname display.
 
 > **Previously**: a Rust terminal application using the `ratatui` framework.
 > **Now**: a Next.js 16 web application with the same features, plus widgets and themes.
@@ -9,33 +9,32 @@ A retro-styled terminal clock TUI ported from **Rust** to the **web** with Next.
 
 ## Themes
 
-Three themes, cycled with `Shift+T`:
+Three themes, cycled via the **☰** hamburger menu or `Shift+T`:
 
 <table>
   <tr>
-    <th>AKITA</th>
+    <th>CLASSIC</th>
     <th>NERV</th>
-    <th>CLASSIC <em>(default)</em></th>
+    <th>EVANGELION <em>(default)</em></th>
   </tr>
   <tr>
-    <td><img src="public/screenshot-akita.png" alt="AKITA theme" width="400"/></td>
-    <td><img src="public/screenshot-nerv.png" alt="NERV theme" width="400"/></td>
-    <td><img src="public/screenshot-classic.png" alt="CLASSIC theme" width="400"/></td>
+    <td><img src="screenshot-classic.png" alt="CLASSIC theme" width="400"/></td>
+    <td><img src="screenshot-nerv.png" alt="NERV theme" width="400"/></td>
+    <td><img src="screenshot-evangelion.png" alt="EVANGELION theme" width="400"/></td>
   </tr>
   <tr>
-    <td>Green-on-black bricks font, amber accents, CRT feel</td>
-    <td>Evangelion-inspired cyan-on-dark, industrial terminals</td>
-    <td>HAL 9000 workspace: beige-on-navy, retro header, columnar widgets</td>
+    <td>Green-on-black terminal, retro dashboard</td>
+    <td>Red industrial, NERV-inspired</td>
+    <td>Purple/orange, Evangelion-inspired</td>
   </tr>
 </table>
 
 ## Features
 
-- **Bricks font** — Custom 6×5 character matrix displayed via CSS grid, matching the original Rust renderer
-- **4 clock modes** — Clock, Timer, Stopwatch, and Countdown, switchable via keyboard shortcuts
+- **3 retro themes** — CLASSIC (green), NERV (red), EVANGELION (purple) — all with the same retro dashboard layout, only colors differ
+- **4 clock modes** — Clock, Timer, Stopwatch, and Countdown, switchable via keyboard shortcuts or tabs
 - **Live widgets** — System Health dashboard, GitHub pending PRs/reviews, Google Calendar agenda — each auto-refreshing on its own schedule
-- **Theme system** — 3 built-in themes (AKITA, NERV, CLASSIC) with CSS custom properties; cycle via `Shift+T`. CLASSIC is a HAL 9000-inspired retro dashboard with window manager tabs, columnar widgets, and hostname display.
-- **Keyboard-driven** — All controls available from the keyboard, no mouse required
+- **Keyboard-driven** — All controls available from the keyboard
 - **Persistent config** — Settings saved to `localStorage` with versioned migration support
 - **Network-accessible** — Serves on your LAN (e.g. `http://192.168.69.130:3000`), works from any device on the network
 - **ANSI support** — Widget output with ANSI escape codes renders in-color in the browser
@@ -69,7 +68,7 @@ npm start
 
 | Mode | Key | Description |
 |------|-----|-------------|
-| Clock | `C` | Current time in bricks font, with optional date/timezone/seconds/millis |
+| Clock | `C` | Current time in large retro text, with optional date/timezone/seconds/millis |
 | Timer | `T` | Countdown timer with configurable durations and repeat |
 | Stopwatch | `W` | Elapsed time with pause/resume |
 | Countdown | `D` | Countdown to a specific datetime |
@@ -145,33 +144,17 @@ Widgets are configured through the app — edit the default config in [lib/confi
 
 ## Theme System
 
-Three built-in themes, cycled with `Shift+T`:
+Three built-in themes, cycled with `Shift+T` or the ☰ hamburger menu:
 
 | Theme | Default | Description |
 |-------|---------|-------------|
-| **AKITA** | ✓ | Green-on-black, amber accents, CRT scanline feel — the original terminal look |
-| **NERV** | | Evangelion-inspired: cyan terminals on dark industrial blue |
-| **CLASSIC** | | HAL 9000 workspace: beige-on-navy, retro window manager header with tabs, columnar widget layout, hostname display |
+| **CLASSIC** | | Green-on-black terminal with the retro dashboard layout |
+| **NERV** | | Red industrial theme, NERV-inspired |
+| **EVANGELION** | ✓ | Purple/orange, Evangelion-inspired — the default on fresh install |
 
-The default theme on a fresh install is **CLASSIC** — the HAL 9000-inspired retro dashboard. The theme persists in localStorage across sessions.
+All three themes share the same retro dashboard layout (big text clock, window manager header with tabs, columnar widgets, hostname display). Only the colors change.
 
 Themes are applied as CSS custom properties on `document.documentElement`. See [lib/themes.ts](lib/themes.ts) for the full variable list and to add your own.
-
-### CSS Variables Exposed
-
-```css
---bg              /* Page background */
---fg              /* Primary text */
---fg-dim          /* Dimmed text (borders) */
---muted           /* Muted text */
---surface         /* Card/panel background */
---surface-alt     /* Card title bar background */
---border-color    /* Default border */
---border-radius   /* Border radius */
---font-mono       /* Monospace font stack */
---section-title-color  /* Widget section titles */
---danger          /* Error/danger color */
-```
 
 ---
 
@@ -239,7 +222,7 @@ components/
 ├── TimerDisplay.tsx      # Timer mode
 ├── StopwatchDisplay.tsx  # Stopwatch mode
 ├── CountdownDisplay.tsx  # Countdown mode
-├── BricksText.tsx        # Bricks font renderer (CSS grid)
+├── ThemeMenu.tsx         # Hamburger theme switcher
 ├── WidgetPanel.tsx       # Widget grid: auto/bottom layout, fetch cycles, ANSI render
 
 lib/

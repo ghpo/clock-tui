@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import BricksText from './BricksText';
 import { getTimeString, getHeaderString } from '@/lib/clock';
 import { ClockConfig } from '@/lib/config';
+import { themes } from '@/lib/themes';
 import WidgetPanel from './WidgetPanel';
 
 interface ClockDisplayProps {
@@ -14,7 +15,6 @@ interface ClockDisplayProps {
   onThemeChange?: (index: number) => void;
 }
 
-const themes = ['default', 'nerv', 'retro'];
 
 export default function ClockDisplay({
   config,
@@ -25,8 +25,9 @@ export default function ClockDisplay({
 }: ClockDisplayProps) {
   const [date, setDate] = useState(new Date());
   const [activeWidget, setActiveWidget] = useState<number | null>(null);
-  const themeName = themes[themeIndex] || 'default';
-  const isRetro = themeName === 'retro';
+  const currentTheme = themes[themeIndex] || themes[0];
+  const themeName = currentTheme.name;
+  const isRetro = !!(currentTheme?.retroLayout);
 
   useEffect(() => {
     const interval = config.showMillis ? 100 : 500;

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { ClockWidgetConfig } from '@/lib/config';
+import { themes } from '@/lib/themes';
 import { AnsiText, stripAnsi } from '@/lib/ansi';
 
 interface WidgetOutput {
@@ -34,11 +35,10 @@ export default function WidgetPanel({
   const timersRef = useRef<Map<number, ReturnType<typeof setInterval>>>(new Map());
 
   // Theme name from themeIndex
-  const themes = useMemo(() => ['default', 'nerv', 'retro'], []);
-  const themeLabels = useMemo(() => ['AKITA', 'NERV', 'CLASSIC'], []);
-  const themeName = themes[themeIndex] || 'default';
-  const themeLabel = themeLabels[themeIndex] || themeName;
-  const isRetro = themeName === 'retro';
+  const currentTheme = themes[themeIndex] || themes[0];
+  const themeName = currentTheme.name;
+  const themeLabel = currentTheme.label;
+  const isRetro = !!(currentTheme?.retroLayout);
 
   // Measure viewport aspect ratio to decide columns (matching the Rust TUI logic)
   useEffect(() => {

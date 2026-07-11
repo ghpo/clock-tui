@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { loadConfig, saveConfig, getDefaultConfig, AppConfig } from '@/lib/config';
 import { applyThemeCss, getThemeName, themes } from '@/lib/themes';
+import ThemeMenu from './ThemeMenu';
 import ClockDisplay from './ClockDisplay';
 import TimerDisplay from './TimerDisplay';
 import StopwatchDisplay from './StopwatchDisplay';
@@ -67,7 +68,7 @@ export default function ClockApp({ mode: initialMode, color, size }: ClockAppPro
     const cfg = loadConfig();
     setConfig(cfg);
     setWidgetThemeIndex(cfg.clock.widget_theme_index || 0);
-    // On first visit (no saved config), default to retro theme
+    // On first visit (no saved config), default to evangelion theme
     if (localStorage.getItem('tclock-config') === null) {
       setWidgetThemeIndex(2);
       setConfig(prev => ({
@@ -113,7 +114,7 @@ export default function ClockApp({ mode: initialMode, color, size }: ClockAppPro
     if (e.shiftKey && e.key.toLowerCase() === 't') {
       e.preventDefault();
       const cfg = configRef.current;
-      const themes = cfg.clock.widget_themes || ['default', 'nerv', 'retro'];
+      const themes = ['default', 'nerv', 'evangelion'];
       const idx = (cfg.clock.widget_theme_index || 0) + 1;
       const next = idx % themes.length;
       setWidgetThemeIndex(next);
@@ -157,14 +158,14 @@ export default function ClockApp({ mode: initialMode, color, size }: ClockAppPro
   const currentSize = size ? parseInt(size, 10) : config.default.size;
   const cssColor = currentColor.startsWith('#') ? currentColor : getNamedColor(currentColor);
   const themeName = getThemeName(widgetThemeIndex);
-  const isRetro = themeName === 'retro';
+  const currentTheme = themes[widgetThemeIndex];
+  const isRetro = !!(currentTheme?.retroLayout);
   const isRetroClock = isRetro && mode === 'clock';
   const retroTabs = [
     { key: 'clock', label: 'CLOCK' },
     { key: 'timer', label: 'TIMER' },
     { key: 'stopwatch', label: 'STOPWATCH' },
     { key: 'countdown', label: 'COUNTDOWN' },
-    { key: 'theme', label: 'THEME' },
   ];
 
   return (
@@ -178,26 +179,44 @@ export default function ClockApp({ mode: initialMode, color, size }: ClockAppPro
                 key={i}
                 className={`retro-tab ${mode === tab.key ? 'active' : ''}`}
                 onClick={() => {
-                  if (tab.key === 'theme') {
-                    const themes = config.clock.widget_themes || ['default', 'nerv', 'retro'];
-                    const idx = (widgetThemeIndex + 1) % themes.length;
-                    setWidgetThemeIndex(idx);
-                    setConfig(prev => ({
-                      ...prev,
-                      clock: { ...prev.clock, widget_theme_index: idx },
-                    }));
-                  } else {
-                    setMode(tab.key as Mode);
-                  }
+                  setMode(tab.key as Mode);
                 }}
               >
                 {tab.label}
               </button>
             ))}
           </div>
-          <div className="retro-hostname">hal9000</div>
+          <div className="retro-header-right">
+            <span className="retro-hostname">hal9000</span>
+            <ThemeMenu
+              currentIndex={widgetThemeIndex}
+              onThemeChange={(idx) => {
+                setWidgetThemeIndex(idx);
+                setConfig(prev => ({
+                  ...prev,
+                  clock: { ...prev.clock, widget_theme_index: idx },
+                }));
+              }}
+            />
+          </div>
         </div>
       )}
+      {/* Floating hamburger: only shows when retro header is hidden (timer/stopwatch/countdown modes) */}
+      {!isRetroClock && (
+      <div className="w-full flex items-center justify-end px-4 pt-1" style={{ position: 'absolute', top: 0, right: 0, zIndex: 40, paddingTop: '4px' }}>
+        <ThemeMenu
+          currentIndex={widgetThemeIndex}
+          onThemeChange={(idx) => {
+            setWidgetThemeIndex(idx);
+            setConfig(prev => ({
+              ...prev,
+              clock: { ...prev.clock, widget_theme_index: idx },
+            }));
+          }}
+        />
+      </div>
+      )}
+
       {/* Mode selector (hidden in retro clock mode) */}
       {(!mounted || !isRetroClock) && (
       <div className="flex gap-2 flex-wrap justify-center">
@@ -217,25 +236,6 @@ export default function ClockApp({ mode: initialMode, color, size }: ClockAppPro
             [{shortcut}] {label}
           </button>
         ))}
-        <button
-          onClick={() => {
-            const themes = config.clock.widget_themes || ['default', 'nerv', 'retro'];
-            const idx = (widgetThemeIndex + 1) % themes.length;
-            setWidgetThemeIndex(idx);
-            setConfig(prev => ({
-              ...prev,
-              clock: { ...prev.clock, widget_theme_index: idx },
-            }));
-          }}
-          className="px-3 py-1 text-xs font-mono border transition-colors"
-          style={{
-            borderColor: 'var(--clock-color)',
-            color: 'var(--clock-color)',
-            borderRadius: 'var(--border-radius)',
-          }}
-        >
-          THEME: {themes[widgetThemeIndex]?.label || 'default'}
-        </button>
       </div>
       )}
 
@@ -268,7 +268,7 @@ export default function ClockApp({ mode: initialMode, color, size }: ClockAppPro
       {/* Footer hint */}
       {(!mounted || !isRetroClock) && (
       <div className="text-xs font-mono mt-4 text-center" style={{ color: 'var(--muted)' }}>
-        {mounted ? `1/2: size · C/T/W/D: mode · Shift+T: ${themes[widgetThemeIndex]?.label || 'theme'} · Space: pause` : '1/2: size · C/T/W/D: mode · Shift+T: theme · Space: pause'}
+        {mounted ? `1/2: size · C/T/W/D: mode · ☰: theme · Space: pause` : '1/2: size · C/T/W/D: mode · Space: pause'}
       </div>
       )}
     </div>
