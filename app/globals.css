@@ -1,0 +1,235 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0A1022;
+  --surface: transparent;
+  --surface-alt: transparent;
+  --fg: #D6D0C5;
+  --fg-dim: #7D86A8;
+  --clock-color: #A9B3A6;
+  --border-color: transparent;
+  --border-radius: 0px;
+  --section-title-color: #F0A96B;
+  --muted: #9C958D;
+  --success: #A6D77A;
+  --warning: #F0C15D;
+  --danger: #D9A4D8;
+  --widget-github: #A6BCD8;
+  --widget-calendar: #7EA8FF;
+  --widget-health: #F2D36E;
+  --font-mono: 'JetBrains Mono', 'Iosevka', 'IBM Plex Mono', 'Fira Code', monospace;
+  --clock-font: 'JetBrains Mono', 'Iosevka', 'IBM Plex Mono', 'Fira Code', monospace;
+  --letter-spacing: -0.04em;
+  --line-height: 0.9;
+  --date-color: #E8B98B;
+  --hostname-color: #7D86A8;
+  --workspace-active-bg: #6E72E6;
+  --workspace-active-fg: #0A1022;
+  --workspace-inactive-color: #7D86A8;
+  --github-repo-color: #A6BCD8;
+  --github-pr-label: #D8A6D9;
+  --github-pr-number: #E7C57D;
+  --github-pr-title: #E7C5A5;
+  --github-issue-label: #E7C57D;
+  --github-issue-number: #E7C57D;
+  --github-issue-title: #E7C5A5;
+  --github-meta: #9B948A;
+  --health-title-color: #F2D36E;
+  --health-check-icon: #A7D57E;
+  --health-warn-icon: #F0C15D;
+  --health-text: #D6D0C5;
+  --calendar-title-color: #F0A96B;
+  --calendar-date-color: #7EA8FF;
+  --calendar-time-color: #A8BDD8;
+  --calendar-event-color: #D8D2C6;
+  --orange: #F0A96B;
+  --yellow: #EAC76A;
+  --blue: #7EA8FF;
+  --green: #A6D77A;
+  --purple: #D9A4D8;
+  --gray-blue: #A7B5C9;
+  --text-secondary: #9C958D;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+@keyframes flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+.flash {
+  animation: flash 1s step-end infinite;
+}
+
+button {
+  background: transparent;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+button:hover {
+  opacity: 0.8;
+}
+
+button:active {
+  opacity: 0.6;
+}
+
+/* ===== Retro Dashboard Layout ===== */
+
+.retro-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 28px;
+  height: 34px;
+  min-height: 34px;
+}
+
+.retro-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  font-size: 15px;
+  font-family: var(--font-mono);
+  height: 34px;
+}
+
+.retro-tab {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 8px;
+  font-size: 15px;
+  font-family: var(--font-mono);
+  background: transparent;
+  color: var(--workspace-inactive-color);
+  border: none;
+  cursor: pointer;
+}
+
+.retro-tab.active {
+  background: var(--workspace-active-bg);
+  color: var(--workspace-active-fg);
+}
+
+.retro-hostname {
+  font-size: 15px;
+  font-family: var(--font-mono);
+  color: var(--hostname-color);
+}
+
+.retro-date {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--date-color);
+  font-family: var(--font-mono);
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
+.retro-clock-text {
+  text-align: center;
+  font-size: clamp(80px, 15vw, 220px);
+  font-weight: 900;
+  color: var(--clock-color);
+  font-family: var(--clock-font);
+  letter-spacing: var(--letter-spacing, -0.04em);
+  line-height: var(--line-height, 0.9);
+  margin: 0;
+  user-select: none;
+}
+
+.retro-content {
+  display: flex;
+  flex-direction: row;
+  gap: 64px;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 40px;
+}
+
+.retro-column-left {
+  width: 52%;
+  min-width: 0;
+}
+
+.retro-column-right {
+  width: 48%;
+  min-width: 0;
+}
+
+.retro-section {
+  margin-bottom: 48px;
+}
+
+.retro-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--section-title-color);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.retro-section-title .icon {
+  color: var(--section-title-color);
+}
+
+.retro-widget-output {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--fg);
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.retro-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.retro-clock-spacer {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  min-height: 35vh;
+  padding-top: 4vh;
+}
+
+.retro-widgets-area {
+  padding: 0 28px 48px;
+}
+
+/* Scrollbar styling (terminal-like) */
+.retro-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.retro-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.retro-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+}

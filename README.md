@@ -1,258 +1,303 @@
-# clock-tui (`tclock`)
+# tclock — Retro Terminal Clock (Web Edition)
 
-![Clock mode with command widgets](./assets/screenshot-clock-widgets.png)
+A retro-styled terminal clock TUI ported from **Rust** to the **web** with Next.js. Displays the time in a custom "bricks" bitmap font (6×5 matrix), with multiple modes (clock, timer, stopwatch, countdown), live widgets (system health, GitHub pending reviews, Google Calendar events), and a full CSS variable-based theme system with **3 built-in themes**.
 
-`tclock` is a terminal clock app with clock, timer, stopwatch, and countdown modes.
+> **Previously**: a Rust terminal application using the `ratatui` framework.
+> **Now**: a Next.js 16 web application with the same features, plus widgets and themes.
 
-This repository is a maintained fork of the original [`race604/clock-tui`](https://github.com/race604/clock-tui). The original project appears to have been paused for a long time, so this fork keeps the core idea and modernizes it with updated Rust dependencies, GitHub release binaries, AUR packaging, and clock-mode command widgets.
+---
 
-## Install
+## Themes
 
-### Arch Linux / AUR
+Three themes, cycled with `Shift+T`:
 
-The recommended install method on Arch Linux is the prebuilt AUR package from this fork:
+<table>
+  <tr>
+    <th>AKITA</th>
+    <th>NERV</th>
+    <th>CLASSIC <em>(default)</em></th>
+  </tr>
+  <tr>
+    <td><img src="public/screenshot-akita.png" alt="AKITA theme" width="400"/></td>
+    <td><img src="public/screenshot-nerv.png" alt="NERV theme" width="400"/></td>
+    <td><img src="public/screenshot-classic.png" alt="CLASSIC theme" width="400"/></td>
+  </tr>
+  <tr>
+    <td>Green-on-black bricks font, amber accents, CRT feel</td>
+    <td>Evangelion-inspired cyan-on-dark, industrial terminals</td>
+    <td>HAL 9000 workspace: beige-on-navy, retro header, columnar widgets</td>
+  </tr>
+</table>
 
-```shell
-yay -S clock-tui-bin
+## Features
+
+- **Bricks font** — Custom 6×5 character matrix displayed via CSS grid, matching the original Rust renderer
+- **4 clock modes** — Clock, Timer, Stopwatch, and Countdown, switchable via keyboard shortcuts
+- **Live widgets** — System Health dashboard, GitHub pending PRs/reviews, Google Calendar agenda — each auto-refreshing on its own schedule
+- **Theme system** — 3 built-in themes (AKITA, NERV, CLASSIC) with CSS custom properties; cycle via `Shift+T`. CLASSIC is a HAL 9000-inspired retro dashboard with window manager tabs, columnar widgets, and hostname display.
+- **Keyboard-driven** — All controls available from the keyboard, no mouse required
+- **Persistent config** — Settings saved to `localStorage` with versioned migration support
+- **Network-accessible** — Serves on your LAN (e.g. `http://192.168.69.130:3000`), works from any device on the network
+- **ANSI support** — Widget output with ANSI escape codes renders in-color in the browser
+
+---
+
+## Quick Start
+
+```bash
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
 ```
 
-### GitHub Releases
+Open [http://localhost:3000](http://localhost:3000) — or your machine's LAN IP on port 3000 — to see the clock.
 
-Prebuilt Linux binaries are published for `x86_64` and `aarch64`:
+### Production Build
 
-<https://github.com/akitaonrails/clock-tui/releases>
-
-Download the tarball for your architecture and put `tclock` somewhere in your `PATH`.
-
-### Build from source
-
-To install this fork directly from GitHub:
-
-```shell
-cargo install --git https://github.com/akitaonrails/clock-tui --package clock-tui
+```bash
+npm run build
+npm start
 ```
 
-To build a local checkout:
+---
 
-```shell
-cargo build --release
+## Usage
+
+### Modes
+
+| Mode | Key | Description |
+|------|-----|-------------|
+| Clock | `C` | Current time in bricks font, with optional date/timezone/seconds/millis |
+| Timer | `T` | Countdown timer with configurable durations and repeat |
+| Stopwatch | `W` | Elapsed time with pause/resume |
+| Countdown | `D` | Countdown to a specific datetime |
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `1` / `2` | Decrease / Increase font size |
+| `C` | Clock mode |
+| `T` | Timer mode |
+| `W` | Stopwatch mode |
+| `D` | Countdown mode |
+| `Space` | Pause / Resume timer or stopwatch |
+| `Shift+T` | Cycle widget theme |
+
+---
+
+## Widget System
+
+Widgets are external scripts executed server-side via `/api/widget/run`. Each widget has its own refresh interval and time-out.
+
+### Built-in Widgets
+
+| Widget | Command | Description |
+|--------|---------|-------------|
+| System Health | `tclock-system-health` | CPU load, memory, disk usage, btrfs status, systemd units |
+| GitHub Pending | `ghpending` | Pending PRs and reviews from GitHub |
+| Google Calendar | `tclock-gcalcli --military` | Upcoming calendar events in 24h format |
+
+### System Health Widget
+
+A bundled bash script at `examples/widgets/tclock-system-health` that renders a compact ANSI dashboard:
+- CPU load / memory usage
+- Per-filesystem disk usage
+- Btrfs scrub age, fstrim status, device I/O errors
+- Systemd failed units and user timer status
+- Zombie process count
+
+### GitHub Pending Widget
+
+Requires the `ghpending` CLI tool ([GitHub](https://github.com/akitaonrails/ghpending)) installed on the server:
+
+```bash
+cargo install ghpending
 ```
 
-The binary will be at `target/release/tclock`.
+Configure with `~/.config/ghpending/config.toml`:
 
-## Basic usage
-
-```shell
-tclock
+```toml
+github_token = "your_github_token"
 ```
 
-Press `q` to exit. In the main loop, press `c`, `w`, or `t` to switch to clock, stopwatch, or timer mode. Press `Space` to pause/resume modes that support pausing.
+### Google Calendar Widget
 
-Use `--help` for all options:
+See [Google Calendar Setup](#google-calendar-setup) below.
 
-```shell
-tclock --help
-tclock clock --help
-tclock timer --help
+### Adding Widgets
+
+Widgets are configured through the app — edit the default config in [lib/config.ts](lib/config.ts) under `clock.widgets`:
+
+```ts
+{
+  title: 'My Widget',
+  command: 'my-widget-command --flag',
+  position: 'auto',       // 'auto' or 'bottom'
+  refresh_secs: 300,      // refresh every 5 minutes
+  timeout_secs: 30,       // kill after 30 seconds
+}
 ```
 
-## Modes
+---
 
-### Clock
+## Theme System
 
-```shell
-tclock clock
+Three built-in themes, cycled with `Shift+T`:
 
-# The clock is also the default mode:
-tclock
+| Theme | Default | Description |
+|-------|---------|-------------|
+| **AKITA** | ✓ | Green-on-black, amber accents, CRT scanline feel — the original terminal look |
+| **NERV** | | Evangelion-inspired: cyan terminals on dark industrial blue |
+| **CLASSIC** | | HAL 9000 workspace: beige-on-navy, retro window manager header with tabs, columnar widget layout, hostname display |
+
+The default theme on a fresh install is **CLASSIC** — the HAL 9000-inspired retro dashboard. The theme persists in localStorage across sessions.
+
+Themes are applied as CSS custom properties on `document.documentElement`. See [lib/themes.ts](lib/themes.ts) for the full variable list and to add your own.
+
+### CSS Variables Exposed
+
+```css
+--bg              /* Page background */
+--fg              /* Primary text */
+--fg-dim          /* Dimmed text (borders) */
+--muted           /* Muted text */
+--surface         /* Card/panel background */
+--surface-alt     /* Card title bar background */
+--border-color    /* Default border */
+--border-radius   /* Border radius */
+--font-mono       /* Monospace font stack */
+--section-title-color  /* Widget section titles */
+--danger          /* Error/danger color */
 ```
 
-![clock](./assets/demo-clock-mode.gif)
+---
 
-Clock options include timezone, seconds, milliseconds, date visibility, color, and size:
+## Google Calendar Setup
 
-```shell
-tclock clock --timezone America/New_York
-tclock clock --no-seconds
-tclock --color '#e63946'
-tclock --size 2
+The Google Calendar widget uses a Python wrapper that reads OAuth credentials from `~/.local/share/gcalcli/oauth.json`.
+
+### Prerequisites
+
+```bash
+pip install google-api-python-client google-auth-oauthlib
 ```
 
-### Timer
+### Setup Steps
 
-```shell
-# Start a 5-minute timer
-tclock timer --duration 5m
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create an OAuth 2.0 Client ID (Desktop app type)
+3. Download the credentials JSON
+4. Save as `~/.local/share/gcalcli/oauth.json`
+5. Run the widget once to authorize:
+
+```bash
+tclock-gcalcli --military
 ```
 
-Durations can use suffixes such as `s`, `m`, `h`, and `d`. Timer mode can run several durations sequentially and can execute a command when time is up:
+The first run opens a browser for OAuth consent; the resulting token saves alongside the credentials file.
 
-```shell
-tclock timer --duration 25m 5m --title Focus Break
-tclock timer --duration 25m --execute terminal-notifier -title tclock -message "Time is up!"
-```
+> **Note**: The widget uses `tclock-gcalcli`, a Python wrapper that reads `~/.local/share/gcalcli/oauth.json` and uses the Google Calendar API directly — not the `gcalcli` CLI tool.
 
-![timer](./assets/demo-timer-mode.gif)
-
-### Stopwatch
-
-```shell
-tclock stopwatch
-```
-
-![stopwatch](./assets/demo-stopwatch-mode.gif)
-
-### Countdown
-
-```shell
-tclock countdown --time 2026-01-01 --title 'New Year 2026'
-```
-
-`--time` accepts values such as `2026-01-01`, `20:00`, `2026-12-25 20:00:00`, or `2026-12-25T20:00:00-04:00`.
-
-![countdown](./assets/demo-countdown-mode.gif)
+---
 
 ## Configuration
 
-`tclock` reads config from the XDG config path:
+All settings are stored in `localStorage` under the key `tclock-config`. The config schema has a `_version` field; when the version changes, saved widget configs reset to defaults while other settings are preserved via deep-merge.
 
-```text
-$XDG_CONFIG_HOME/tclock/config.toml
+See [lib/config.ts](lib/config.ts) for the full schema and defaults.
+
+### Config Version History
+
+| Version | Change |
+|---------|--------|
+| 1 | Initial |
+| 2 | Widget command format updated |
+| 3 | Google Calendar: switched from gcalcli to tclock-gcalcli |
+| 5 | Theme rename: AKITA → NERV → CLASSIC with HAL 9000 retro dashboard |
+| 6 | Fix: hydration errors, theme cycling with CLASSIC default |
+| 7 | Widget theme passthrough: retro themes mapped to default for CLI commands |
+| 8 | Force widget_themes to 3 entries, clamp theme index |
+
+---
+
+## Architecture
+
+```
+app/
+├── layout.tsx            # Root layout, metadata, CSS variable background
+├── page.tsx              # Main page with searchParams mode routing
+├── globals.css           # CSS custom properties and theme defaults
+└── api/widget/run/
+    └── route.ts          # API route: executes widget commands server-side
+
+components/
+├── ClockApp.tsx          # Main app shell: keyboard handler, mode dispatch, theme
+├── ClockDisplay.tsx      # Clock mode: time display + widget panel
+├── TimerDisplay.tsx      # Timer mode
+├── StopwatchDisplay.tsx  # Stopwatch mode
+├── CountdownDisplay.tsx  # Countdown mode
+├── BricksText.tsx        # Bricks font renderer (CSS grid)
+├── WidgetPanel.tsx       # Widget grid: auto/bottom layout, fetch cycles, ANSI render
+
+lib/
+├── config.ts             # Config types, defaults, localStorage persistence, versioned migration
+├── themes.ts             # Theme definitions (3 themes) and CSS variable application
+├── bricks.ts             # Character matrix definitions (ported from Rust bricks.rs)
+├── ansi.tsx              # ANSI escape code parser + React component renderer
+├── clock.ts              # Clock logic (time formatting)
+├── modes.ts              # Duration formatting helpers
+├── timer.ts              # Timer logic
+├── stopwatch.ts          # Stopwatch logic
+├── countdown.ts          # Countdown logic
+
+hooks/
+├── useTimer.ts           # Timer hook
+├── useStopwatch.ts       # Stopwatch hook
+└── useCountdown.ts       # Countdown hook
 ```
 
-That is usually:
+### Key Decisions
 
-```text
-~/.config/tclock/config.toml
-```
+- **Client components** — All interactive components use `"use client"` for timers and browser APIs (localStorage, ResizeObserver)
+- **URL-based mode** — Clock mode is driven by `?mode=clock` searchParams, preserving the URL-as-state pattern
+- **Widgets as CLI commands** — Widget scripts run server-side via `child_process.execFile`, so output is always from the machine hosting the app; no browser-side execution
+- **No React state library** — The app is small enough that `useState`/`useRef`/`useCallback` suffice; no Redux or Zustand
+- **CSS variables for theming** — Themes are applied by setting CSS custom properties, not by swapping stylesheets; makes runtime theme changes instant
 
-Missing config is ignored. Invalid TOML prints an error and falls back to defaults.
+---
 
-Example:
-
-```toml
-[default]
-mode = "clock"
-color = "green"
-size = 1
-
-[clock]
-show_date = true
-show_seconds = true
-show_millis = false
-timezone = "America/Sao_Paulo"
-
-[timer]
-durations = ["25m", "5m"]
-titles = ["Focus", "Break"]
-repeat = false
-show_millis = true
-start_paused = false
-auto_quit = false
-```
-
-## Clock widgets
-
-Clock mode can display command widgets below the clock. A widget runs a command, captures its output, renders ANSI colors/styles, and refreshes independently.
-
-Widgets are useful for small status panels: GitHub pending work, calendars, system stats, reminders, CI state, or any command that prints useful text and exits.
-
-The clock automatically sizes itself into the top area when widgets are configured, and the bottom area shows up to 2 widgets on square-ish terminals, 4 on wide terminals, and 6 on ultra-wide terminals.
-
-Widgets with `position = "bottom"` are placed in a full-width band beneath the widget row instead, stacked in config order and each sized to exactly fit its output. The widget row keeps a minimum height when both are present, and a bottom widget that cannot get at least 3 rows is hidden rather than squeezed. Bottom widgets don't count against the per-row widget limits, so a status strip can coexist with a full row of columns.
-
-When a widget has more output than fits on screen, scroll it with the mouse wheel over that widget. `Home` and `End` jump the active widget to the top or bottom. In clock mode, press `Shift+T` to cycle the configured widget theme; lowercase `t` still switches to Timer mode.
-
-Each widget supports:
-
-- `title`: optional display title; omit it to fall back to the command name, or set it to an empty string (`title = ""`) to suppress the title line entirely so the command output owns the whole widget (useful for self-rendered headers)
-- `command`: executable string, or array form with arguments
-- `refresh_secs`: refresh interval, default `900`
-- `timeout_secs`: command timeout, default `30`
-- `position`: `"auto"` (default, widget row) or `"bottom"` (full-width band below the row, sized to content)
-
-The app injects the current widget theme into every widget subprocess as `TCLOCK_WIDGET_THEME`. Theme names are a contract between your config and the widget commands: a command must understand the name it receives. The default cycle matches the bundled system-health widget (`default`, then `nerv`) and can be customized under `[clock]` for your own themed widgets:
-
-```toml
-[clock]
-widget_themes = ["default", "nerv"]
-```
-
-An empty or single-item list makes `Shift+T` harmless. For the bundled `tclock-system-health`, keep `default`/`nerv` unless you also add that theme to the script.
-
-### Bundled example: system-health widget
-
-The repo ships a ready-to-use widget at [`examples/widgets/tclock-system-health`](./examples/widgets/tclock-system-health). The AUR package installs it as `/usr/bin/tclock-system-health`; release tarballs include it beside `tclock`, so manual installs can extract it to `~/.local/bin` or copy it to `/usr/local/bin`. It renders a two-column health dashboard with a one-line verdict header: backup/cleanup timer freshness, timeshift snapshots, live system/jobs/storage state, and a full-width btrfs row (scrub age per filesystem, fstrim age, allocation pressure, device I/O error counters) — all without root.
-
-Run it with no arguments and it auto-detects common setups (backup-looking user timers with staleness derived from each timer's own period, timeshift via grub-btrfs, btrfs rows only when btrfs is mounted, removable media excluded). Host-specific tuning is plain flags — see `tclock-system-health --help`. The intended pattern is a tiny wrapper script on your PATH holding your host's flags, referenced from the widget config:
-
-The widget supports named color themes, including the original `default` theme and an Evangelion/NERV-inspired `nerv` theme. It honors `TCLOCK_WIDGET_THEME`, so it works with `Shift+T` without a wrapper; an explicit `--theme` or `TCLOCK_SYSTEM_HEALTH_THEME` still wins. See [System-health widget themes](./docs/widget-themes.md) for usage and contributor notes. Packaged installs also include this guide as `/usr/share/doc/clock-tui/widget-themes.md`.
-
-```toml
-[[clock.widgets]]
-title = ""                    # the script renders its own title+verdict line
-command = "my-system-health"  # your wrapper around tclock-system-health
-refresh_secs = 300
-position = "bottom"
-```
-
-Example wrapper using the NERV theme:
+## Development
 
 ```bash
-#!/usr/bin/env bash
-exec tclock-system-health --theme nerv "$@"
+# Start dev server with Turbopack
+npm run dev
+
+# Lint
+npm run lint
+
+# Type check
+npx tsc --noEmit
 ```
 
-### Screenshot example
+The app uses:
+- **Next.js 16** with Turbopack and the App Router
+- **Tailwind CSS** for utility classes (minimal — most styling is via CSS variables)
+- **Geist Mono** font (Vercel's monospace font, matches the terminal aesthetic)
+- **No external state management** or CSS-in-JS libraries
 
-The screenshot at the top uses the current local config from this fork, with three widget commands:
-
-- [`ghpending`](https://github.com/akitaonrails/ghpending) for GitHub pending tasks
-- [`google-calendar-tui`](https://github.com/akitaonrails/google-calendar-tui) for Google Calendar agenda output
-- `tclock-system-health` as a bottom status strip
-
-```toml
-[clock]
-show_date = true
-
-[[clock.widgets]]
-title = "GitHub pending"
-command = "ghpending"
-refresh_secs = 900
-
-[[clock.widgets]]
-title = "Google Calendar"
-command = "google-calendar-tui"
-refresh_secs = 3600
-
-[[clock.widgets]]
-title = ""
-command = "tclock-system-health"
-refresh_secs = 300
-position = "bottom"
-```
-
-Array commands are supported when you need arguments or a shell wrapper:
-
-```toml
-[[clock.widgets]]
-title = "GPU"
-command = ["nvidia-smi"]
-refresh_secs = 60
-
-[[clock.widgets]]
-title = "Shell command"
-command = ["sh", "-c", "printf 'hello from a widget'"]
-```
-
-Widget commands should be finite stdout-producing commands that exit. Long-running alternate-screen TUIs are not a good fit unless they also provide a command or flag that prints a snapshot and exits.
-
-Widget output is intended for compact status text and is capped in memory; very large command outputs are truncated.
-
-## Credits
-
-Original project and core app by [Race604](https://github.com/race604). This fork keeps the original MIT license and continues the project with maintenance, packaging, and widget features.
+---
 
 ## License
 
-MIT License. See [LICENSE](./LICENSE).
+MIT License — see [LICENSE](LICENSE).
+
+---
+
+## Acknowledgements
+
+- Original [clock-tui](https://github.com/akitaonrails/clock-tui) by [akitaonrails](https://github.com/akitaonrails) — the Rust TUI that inspired this web port
+- [ghpending](https://github.com/akitaonrails/ghpending) — Rust CLI for GitHub pending reviews
+- [Geist Mono](https://vercel.com/font) by Vercel
