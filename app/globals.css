@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Jersey';
+  src: url('/fonts/JerseyM54-aLX9.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #0A1022;
   --surface: transparent;
@@ -7,6 +15,7 @@
   --fg: #D6D0C5;
   --fg-dim: #7D86A8;
   --clock-color: #A9B3A6;
+  --clock-font: 'Jersey', sans-serif;
   --border-color: transparent;
   --border-radius: 0px;
   --section-title-color: #F0A96B;
@@ -17,8 +26,7 @@
   --widget-github: #A6BCD8;
   --widget-calendar: #7EA8FF;
   --widget-health: #F2D36E;
-  --font-mono: 'JetBrains Mono', 'Iosevka', 'IBM Plex Mono', 'Fira Code', monospace;
-  --clock-font: 'JetBrains Mono', 'Iosevka', 'IBM Plex Mono', 'Fira Code', monospace;
+  --font-mono: 'Fira Code', 'JetBrains Mono', 'Iosevka', 'Meslo', monospace;
   --letter-spacing: -0.04em;
   --line-height: 0.9;
   --date-color: #E8B98B;
@@ -152,18 +160,6 @@ button:active {
   margin-bottom: 0;
 }
 
-.retro-clock-text {
-  text-align: center;
-  font-size: clamp(80px, 15vw, 220px);
-  font-weight: 900;
-  color: var(--clock-color);
-  font-family: var(--clock-font);
-  letter-spacing: var(--letter-spacing, -0.04em);
-  line-height: var(--line-height, 0.9);
-  margin: 0;
-  user-select: none;
-}
-
 .retro-content {
   display: flex;
   flex-direction: row;
@@ -213,6 +209,17 @@ button:active {
 .retro-meta {
   font-size: 12px;
   color: var(--muted);
+}
+
+.retro-clock-text {
+  font-family: var(--clock-font);
+  font-size: clamp(140px, 24vw, 360px);
+  line-height: 1;
+  letter-spacing: 4px;
+  text-align: center;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 .retro-clock-spacer {

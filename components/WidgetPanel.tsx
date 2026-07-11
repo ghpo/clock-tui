@@ -145,15 +145,16 @@ export default function WidgetPanel({
 
   // Retro: two-column layout with section titles, no cards
   if (isRetro) {
-    // Left column gets widgets[0], right column gets the rest
-    const leftWidgets = widgets.slice(0, 1);
-    const rightWidgets = widgets.slice(1);
+    // Left column: System Health + GitHub; Right column: Google Calendar
+    const leftWidgets = widgets.filter(w => w.title !== 'Google Calendar');
+    const rightWidgets = widgets.filter(w => w.title === 'Google Calendar');
 
     return (
       <div ref={containerRef} className="retro-content">
-        {/* Left column — first widget */}
+        {/* Left column — System Health + GitHub */}
         <div className="retro-column-left">
-          {leftWidgets.map((widget, idx) => {
+          {leftWidgets.map((widget) => {
+            const idx = widgets.indexOf(widget);
             const state = widgetStates.get(idx);
             const output = state?.output || state?.error || '';
             const lines = output.split('\n').filter(l => l.trim());
@@ -181,10 +182,10 @@ export default function WidgetPanel({
           })}
         </div>
 
-        {/* Right column — remaining widgets */}
+        {/* Right column — Google Calendar */}
         <div className="retro-column-right">
-          {rightWidgets.map((widget, idx) => {
-            const index = leftWidgets.length + idx;
+          {rightWidgets.map((widget) => {
+            const index = widgets.indexOf(widget);
             const state = widgetStates.get(index);
             const output = state?.output || state?.error || '';
             const lines = output.split('\n').filter(l => l.trim());

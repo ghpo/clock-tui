@@ -26,7 +26,6 @@ export default function ClockDisplay({
   const [date, setDate] = useState(new Date());
   const [activeWidget, setActiveWidget] = useState<number | null>(null);
   const currentTheme = themes[themeIndex] || themes[0];
-  const themeName = currentTheme.name;
   const isRetro = !!(currentTheme?.retroLayout);
 
   useEffect(() => {
@@ -39,6 +38,9 @@ export default function ClockDisplay({
   const headerStr = config.showDate ? getHeaderString(date, config.timezone) : null;
   const hasWidgets = config.widgets && config.widgets.length > 0;
 
+  // retro mode: use theme's clock color so it changes when cycling themes
+  const clockColor = isRetro ? (currentTheme.css['--clock-color'] || color) : color;
+
   // Retro: date + big text clock + optional widgets below
   if (isRetro) {
     return (
@@ -46,9 +48,17 @@ export default function ClockDisplay({
         {/* Date */}
         <div className="retro-date">{headerStr || ''}</div>
 
-        {/* Big text clock */}
+        {/* Big text clock (JerseyM54 font, : via mono) */}
         <div className="w-full flex items-start justify-center retro-clock-spacer">
-          <div className="retro-clock-text">{timeStr}</div>
+          <div className="retro-clock-text">
+            {timeStr.split('').map((ch, i) =>
+              ch === ':' ? (
+                <span key={i} style={{ color: clockColor, fontFamily: 'var(--font-mono)', fontSize: '0.55em', lineHeight: 1, verticalAlign: 'middle' }}>:</span>
+              ) : (
+                <span key={i} style={{ color: clockColor }}>{ch}</span>
+              )
+            )}
+          </div>
         </div>
 
         {/* Widgets */}
@@ -76,7 +86,7 @@ export default function ClockDisplay({
             {headerStr}
           </div>
         )}
-        <BricksText text={timeStr} size={size} color={color} />
+        <BricksText text={timeStr} size={size} color={clockColor} />
       </div>
 
       {hasWidgets && (

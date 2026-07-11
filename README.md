@@ -1,6 +1,6 @@
 # tclock — Retro Terminal Clock (Web Edition)
 
-A retro-styled terminal clock TUI ported from **Rust** to the **web** with Next.js. Three built-in themes with a HAL 9000-inspired retro dashboard layout — big text clock, window manager-style tabs, columnar widgets, and hostname display.
+A retro-styled terminal clock TUI ported from **Rust** to the **web** with Next.js. Three built-in themes with a HAL 9000-inspired retro dashboard layout — big text clock (JerseyM54 font), window manager-style tabs, columnar widgets, and hostname display.
 
 > **Previously**: a Rust terminal application using the `ratatui` framework.
 > **Now**: a Next.js 16 web application with the same features, plus widgets and themes.
@@ -18,9 +18,9 @@ Three themes, cycled via the **☰** hamburger menu or `Shift+T`:
     <th>EVANGELION <em>(default)</em></th>
   </tr>
   <tr>
-    <td><img src="public/screenshot-classic.png" alt="CLASSIC theme" width="400"/></td>
-    <td><img src="public/screenshot-nerv.png" alt="NERV theme" width="400"/></td>
-    <td><img src="public/screenshot-evangelion.png" alt="EVANGELION theme" width="400"/></td>
+    <td><img src="assets/screenshot-classic.png" alt="CLASSIC theme" width="400"/></td>
+    <td><img src="assets/screenshot-nerv.png" alt="NERV theme" width="400"/></td>
+    <td><img src="assets/screenshot-evangelion.png" alt="EVANGELION theme" width="400"/></td>
   </tr>
   <tr>
     <td>Green-on-black terminal, retro dashboard</td>

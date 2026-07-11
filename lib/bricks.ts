@@ -1,55 +1,135 @@
-export type CharMatrix = [number[], number[], number[], number[], number[]];
+export const FONT = {
+  name: 'Bricks',
+  glyphWidth: 9,
+  glyphHeight: 9,
+  characterSpacing: 1,
+  lineSpacing: 2,
+  defaultScale: 8,
+} as const;
 
-const GLYPH_COLUMNS = 6;
-const GLYPH_ROWS = 5;
-
-/**
- * Each row is an array of numbers where:
- *   odd-indexed items = length of "off" segments
- *   even-indexed items = length of "on" segments
- * Example: vec![0, 6] => "██████"
- *          vec![2, 2] => "  ██"
- */
-export function getCharMatrix(c: string): CharMatrix | null {
-  switch (c) {
-    case '0':
-      return [[0, 6], [0, 2, 2, 2], [0, 2, 2, 2], [0, 2, 2, 2], [0, 6]];
-    case '1':
-      return [[0, 4], [2, 2], [2, 2], [2, 2], [0, 6]];
-    case '2':
-      return [[0, 6], [4, 2], [0, 6], [0, 2], [0, 6]];
-    case '3':
-      return [[0, 6], [4, 2], [0, 6], [4, 2], [0, 6]];
-    case '4':
-      return [[0, 2, 2, 2], [0, 2, 2, 2], [0, 6], [4, 2], [4, 2]];
-    case '5':
-      return [[0, 6], [0, 2], [0, 6], [4, 2], [0, 6]];
-    case '6':
-      return [[0, 6], [0, 2], [0, 6], [0, 2, 2, 2], [0, 6]];
-    case '7':
-      return [[0, 6], [4, 2], [4, 2], [4, 2], [4, 2]];
-    case '8':
-      return [[0, 6], [0, 2, 2, 2], [0, 6], [0, 2, 2, 2], [0, 6]];
-    case '9':
-      return [[0, 6], [0, 2, 2, 2], [0, 6], [4, 2], [0, 6]];
-    case ':':
-      return [[], [2, 2], [], [2, 2], []];
-    case '.':
-      return [[], [], [], [], [2, 2]];
-    case '-':
-      return [[], [], [0, 6], [], []];
-    default:
-      return null;
-  }
-}
-
-export function getGlyphColumns() {
-  return GLYPH_COLUMNS;
-}
-
-export function getGlyphRows() {
-  return GLYPH_ROWS;
-}
+const DIGITS: Record<string, string[]> = {
+  '0': [
+    '011111110',
+    '111111111',
+    '110000011',
+    '110000011',
+    '110000011',
+    '110000011',
+    '110000011',
+    '111111111',
+    '011111110',
+  ],
+  '1': [
+    '000111000',
+    '001111000',
+    '000011000',
+    '000011000',
+    '000011000',
+    '000011000',
+    '000011000',
+    '000011000',
+    '001111110',
+  ],
+  '2': [
+    '011111110',
+    '111111111',
+    '110000011',
+    '000000011',
+    '000000011',
+    '011111110',
+    '110000000',
+    '111111111',
+    '111111111',
+  ],
+  '3': [
+    '011111110',
+    '111111111',
+    '110000011',
+    '000000011',
+    '001111110',
+    '000000011',
+    '110000011',
+    '111111111',
+    '011111110',
+  ],
+  '4': [
+    '110000011',
+    '110000011',
+    '110000011',
+    '110000011',
+    '011111111',
+    '000000011',
+    '000000011',
+    '000000011',
+    '000000011',
+  ],
+  '5': [
+    '111111111',
+    '111111111',
+    '110000000',
+    '110000000',
+    '011111110',
+    '000000011',
+    '110000011',
+    '111111111',
+    '011111110',
+  ],
+  '6': [
+    '011111110',
+    '111111111',
+    '110000011',
+    '110000000',
+    '111111110',
+    '110000011',
+    '110000011',
+    '111111111',
+    '011111110',
+  ],
+  '7': [
+    '111111111',
+    '111111111',
+    '000000011',
+    '000000110',
+    '000001100',
+    '000011000',
+    '000110000',
+    '000110000',
+    '000110000',
+  ],
+  '8': [
+    '011111110',
+    '111111111',
+    '110000011',
+    '110000011',
+    '011111110',
+    '110000011',
+    '110000011',
+    '111111111',
+    '011111110',
+  ],
+  '9': [
+    '011111110',
+    '111111111',
+    '110000011',
+    '110000011',
+    '011111111',
+    '000000011',
+    '110000011',
+    '111111111',
+    '011111110',
+  ],
+  ':': [
+    '000000000',
+    '000111000',
+    '000111000',
+    '000000000',
+    '000000000',
+    '000000000',
+    '000111000',
+    '000111000',
+    '000000000',
+  ],
+};
 
 export interface BricksCell {
   on: boolean;
@@ -57,33 +137,38 @@ export interface BricksCell {
   col: number;
 }
 
-/**
- * Expand a character's RLE matrix into an array of on/off cells.
- * Each row of the matrix is expanded to `GLYPH_COLUMNS` cells.
- */
+export function getCharMatrix(c: string): string[] | null {
+  const glyph = DIGITS[c] || null;
+  if (glyph) return glyph;
+
+  if (c === ' ') {
+    return Array(FONT.glyphHeight).fill('0'.repeat(FONT.glyphWidth));
+  }
+
+  return null;
+}
+
+export function getGlyphColumns(): number {
+  return FONT.glyphWidth;
+}
+
+export function getGlyphRows(): number {
+  return FONT.glyphHeight;
+}
+
 export function expandCharCells(c: string): BricksCell[] | null {
   const matrix = getCharMatrix(c);
   if (!matrix) return null;
 
   const cells: BricksCell[] = [];
-  for (let row = 0; row < GLYPH_ROWS; row++) {
-    const segments = matrix[row];
-    let col = 0;
-    let on = false;
-    for (const len of segments) {
-      for (let i = 0; i < len && col < GLYPH_COLUMNS; i++) {
-        cells.push({ on, row, col });
-        col++;
-      }
-      on = !on;
-    }
-    // Fill remaining columns in this row as "off"
-    while (col < GLYPH_COLUMNS) {
-      cells.push({ on: false, row, col });
-      col++;
+  for (let row = 0; row < FONT.glyphHeight; row++) {
+    const line = matrix[row] || '';
+    for (let col = 0; col < FONT.glyphWidth; col++) {
+      const ch = col < line.length ? line[col] : '0';
+      cells.push({ on: ch === '1', row, col });
     }
   }
   return cells;
 }
 
-export const CHARACTER_SPACING = 2;
+export const CHARACTER_SPACING = FONT.characterSpacing;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { expandCharCells, CHARACTER_SPACING, getGlyphColumns, getGlyphRows } from '@/lib/bricks';
+import { expandCharCells, CHARACTER_SPACING, getGlyphColumns, getGlyphRows, FONT } from '@/lib/bricks';
 
 interface BricksCharProps {
   char: string;
@@ -9,9 +9,7 @@ interface BricksCharProps {
   color: string;
 }
 
-// Base pixel size per brick unit — size=1 in the Rust TUI maps to ~1 terminal
-// cell (~10px). We use a constant so the web version is visible at the default.
-const BRICK_PX = 10;
+const BRICK_PX = FONT.defaultScale;
 
 function BricksChar({ char, size, color }: BricksCharProps) {
   const cells = useMemo(() => expandCharCells(char), [char]);
@@ -37,6 +35,7 @@ function BricksChar({ char, size, color }: BricksCharProps) {
             width: px,
             height: px,
             backgroundColor: cell.on ? color : 'transparent',
+            borderRadius: px * 0.2,
           }}
         />
       ))}
