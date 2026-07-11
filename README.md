@@ -18,9 +18,9 @@ Three themes, cycled via the **☰** hamburger menu or `Shift+T`:
     <th>EVANGELION <em>(default)</em></th>
   </tr>
   <tr>
-    <td><img src="screenshot-classic.png" alt="CLASSIC theme" width="400"/></td>
-    <td><img src="screenshot-nerv.png" alt="NERV theme" width="400"/></td>
-    <td><img src="screenshot-evangelion.png" alt="EVANGELION theme" width="400"/></td>
+    <td><img src="public/screenshot-classic.png" alt="CLASSIC theme" width="400"/></td>
+    <td><img src="public/screenshot-nerv.png" alt="NERV theme" width="400"/></td>
+    <td><img src="public/screenshot-evangelion.png" alt="EVANGELION theme" width="400"/></td>
   </tr>
   <tr>
     <td>Green-on-black terminal, retro dashboard</td>
