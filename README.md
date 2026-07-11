@@ -171,12 +171,36 @@ Each widget supports:
 - `timeout_secs`: command timeout, default `30`
 - `position`: `"auto"` (default, widget row) or `"bottom"` (full-width band below the row, sized to content)
 
+### Bundled example: system-health widget
+
+The repo ships a ready-to-use widget at [`examples/widgets/tclock-system-health`](./examples/widgets/tclock-system-health). The AUR package installs it as `/usr/bin/tclock-system-health`; release tarballs include it beside `tclock`, so manual installs can extract it to `~/.local/bin` or copy it to `/usr/local/bin`. It renders a two-column health dashboard with a one-line verdict header: backup/cleanup timer freshness, timeshift snapshots, live system/jobs/storage state, and a full-width btrfs row (scrub age per filesystem, fstrim age, allocation pressure, device I/O error counters) — all without root.
+
+Run it with no arguments and it auto-detects common setups (backup-looking user timers with staleness derived from each timer's own period, timeshift via grub-btrfs, btrfs rows only when btrfs is mounted, removable media excluded). Host-specific tuning is plain flags — see `tclock-system-health --help`. The intended pattern is a tiny wrapper script on your PATH holding your host's flags, referenced from the widget config:
+
+The widget supports named color themes, including the original `default` theme and an Evangelion/NERV-inspired `nerv` theme. See [System-health widget themes](./docs/widget-themes.md) for usage and contributor notes. Packaged installs also include this guide as `/usr/share/doc/clock-tui/widget-themes.md`.
+
+```toml
+[[clock.widgets]]
+title = ""                    # the script renders its own title+verdict line
+command = "my-system-health"  # your wrapper around tclock-system-health
+refresh_secs = 300
+position = "bottom"
+```
+
+Example wrapper using the NERV theme:
+
+```bash
+#!/usr/bin/env bash
+exec tclock-system-health --theme nerv "$@"
+```
+
 ### Screenshot example
 
-The screenshot at the top uses the current local config from this fork, with two widget commands:
+The screenshot at the top uses the current local config from this fork, with three widget commands:
 
 - [`ghpending`](https://github.com/akitaonrails/ghpending) for GitHub pending tasks
 - [`google-calendar-tui`](https://github.com/akitaonrails/google-calendar-tui) for Google Calendar agenda output
+- `tclock-system-health` as a bottom status strip
 
 ```toml
 [clock]
@@ -191,6 +215,12 @@ refresh_secs = 900
 title = "Google Calendar"
 command = "google-calendar-tui"
 refresh_secs = 3600
+
+[[clock.widgets]]
+title = ""
+command = "tclock-system-health"
+refresh_secs = 300
+position = "bottom"
 ```
 
 Array commands are supported when you need arguments or a shell wrapper:

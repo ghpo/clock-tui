@@ -87,9 +87,12 @@ jobs:
       - name: Create tarball
         run: |
           STAGE=$(mktemp -d)
-          cp target/${{ matrix.target }}/release/tclock "$STAGE/"
-          cp LICENSE README.md "$STAGE/"
-          tar czf ${{ matrix.artifact }}.tar.gz -C "$STAGE" tclock LICENSE README.md
+          install -Dm0755 target/${{ matrix.target }}/release/tclock "$STAGE/tclock"
+          install -Dm0755 examples/widgets/tclock-system-health "$STAGE/tclock-system-health"
+          install -Dm0644 LICENSE "$STAGE/LICENSE"
+          install -Dm0644 README.md "$STAGE/README.md"
+          install -Dm0644 docs/widget-themes.md "$STAGE/docs/widget-themes.md"
+          tar czf ${{ matrix.artifact }}.tar.gz -C "$STAGE" tclock tclock-system-health LICENSE README.md docs/widget-themes.md
           rm -rf "$STAGE"
 
       - name: Compute SHA256
@@ -138,8 +141,9 @@ jobs:
             echo "### Manual"
             echo
             echo '```bash'
+            echo "ARCH=x86_64  # or aarch64"
             echo "mkdir -p ~/.local/bin"
-            echo "curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/clock-tui-linux-x86_64.tar.gz | tar xz -C ~/.local/bin tclock"
+            echo "curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/clock-tui-linux-\$ARCH.tar.gz | tar xz -C ~/.local/bin tclock tclock-system-health"
             echo '```'
             echo
             echo "## Checksums (SHA256)"
