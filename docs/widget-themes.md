@@ -22,7 +22,16 @@ Use the Evangelion/NERV-inspired theme:
 tclock-system-health --theme nerv
 ```
 
-You can also set the theme with an environment variable, which is convenient in wrapper scripts:
+When used as a `tclock` clock widget, the app sets `TCLOCK_WIDGET_THEME` for every widget subprocess. Press `Shift+T` in clock mode to cycle the configured widget themes; lowercase `t` still switches to Timer mode. Theme names are a contract between your config and the widget commands: a command must understand the name it receives. The default cycle matches this bundled widget (`default`, then `nerv`) and can be customized in config for widgets that support other names:
+
+```toml
+[clock]
+widget_themes = ["default", "nerv"]
+```
+
+An empty or single-item list makes `Shift+T` a no-op. For `tclock-system-health`, keep `default`/`nerv` unless you also add that theme below.
+
+You can also set the system-health-specific environment variable, which is convenient in wrapper scripts and takes precedence over `TCLOCK_WIDGET_THEME`:
 
 ```bash
 #!/usr/bin/env bash
@@ -34,6 +43,8 @@ or:
 ```bash
 TCLOCK_SYSTEM_HEALTH_THEME=nerv tclock-system-health
 ```
+
+Precedence is: explicit `--theme`, then `TCLOCK_SYSTEM_HEALTH_THEME`, then generic `TCLOCK_WIDGET_THEME`, then `default`.
 
 Then point a bottom widget at the wrapper:
 

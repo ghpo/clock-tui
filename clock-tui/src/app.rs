@@ -229,6 +229,9 @@ impl App {
                     !no_seconds && clock_config.map(|c| c.show_seconds).unwrap_or(true),
                     timezone.or_else(|| clock_config.and_then(|c| c.timezone)),
                     clock_config.map(|c| c.widgets.clone()).unwrap_or_default(),
+                    clock_config
+                        .map(|c| c.widget_themes.clone())
+                        .unwrap_or_default(),
                 ));
             }
             Mode::Timer {
@@ -310,6 +313,7 @@ impl App {
     pub fn on_key(&mut self, key: KeyCode) {
         if let Some(w) = self.clock.as_mut() {
             match key {
+                KeyCode::Char('T') => w.cycle_widget_theme(),
                 KeyCode::Home => w.scroll_active_widget_to_top(),
                 KeyCode::End => w.scroll_active_widget_to_bottom(),
                 _ => {}
@@ -551,5 +555,51 @@ mod tests {
     fn parse_timezone_reports_invalid_names() {
         assert!(parse_timezone("America/New_York").is_ok());
         assert!(parse_timezone("Nowhere/Missing").is_err());
+    }
+
+    #[test]
+    fn uppercase_t_cycles_clock_widget_theme_and_lowercase_t_does_not() {
+        let clock = Clock::new(
+            DEFAULT_CLOCK_SIZE,
+            Style::default(),
+            true,
+            false,
+            true,
+            None,
+            Vec::new(),
+            vec!["default".to_string(), "nerv".to_string()],
+        );
+        let mut app = App {
+            mode: Some(Mode::Clock {
+                timezone: None,
+                no_date: false,
+                no_seconds: false,
+                millis: false,
+            }),
+            color: None,
+            size: None,
+            clock: Some(clock),
+            timer: None,
+            stopwatch: None,
+            countdown: None,
+        };
+
+        app.on_key(KeyCode::Char('T'));
+        assert_eq!(
+            app.clock
+                .as_ref()
+                .expect("clock mode remains active")
+                .current_widget_theme_for_test(),
+            "nerv"
+        );
+
+        app.on_key(KeyCode::Char('t'));
+        assert_eq!(
+            app.clock
+                .as_ref()
+                .expect("clock mode remains active")
+                .current_widget_theme_for_test(),
+            "nerv"
+        );
     }
 }

@@ -63,7 +63,8 @@
 #   --no-btrfs                      omit the btrfs row even if btrfs is mounted
 #   --title TEXT                    header title (default "System Health")
 #   --theme NAME                    color theme: default, nerv (default: default;
-#                                   or $TCLOCK_SYSTEM_HEALTH_THEME)
+#                                   or $TCLOCK_SYSTEM_HEALTH_THEME, falling back
+#                                   to generic $TCLOCK_WIDGET_THEME from tclock)
 #   --list-themes                   print available themes and exit
 set -u
 export LC_ALL=C
@@ -123,7 +124,7 @@ LEFT_COL=44
 SINGLE_COLUMN=0
 NO_BTRFS=0
 TITLE="System Health"
-THEME=${TCLOCK_SYSTEM_HEALTH_THEME:-default}
+THEME=${TCLOCK_SYSTEM_HEALTH_THEME:-${TCLOCK_WIDGET_THEME:-default}}
 LEFT_SPEC=()          # ordered left-column entries: "timer:LABEL:UNIT:STALE" | "snapshots"
 EXCLUDE_MOUNTS=()
 BENIGN_ZOMBIES=(uwsm-app systemctl)

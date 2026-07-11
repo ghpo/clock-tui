@@ -5,6 +5,7 @@ use serde::{Deserialize, Deserializer};
 
 pub(crate) const DEFAULT_WIDGET_REFRESH_SECS: u64 = 15 * 60;
 pub(crate) const DEFAULT_WIDGET_TIMEOUT_SECS: u64 = 30;
+pub(crate) const DEFAULT_WIDGET_THEMES: [&str; 2] = ["default", "nerv"];
 
 fn deserialize_timezone<'de, D>(deserializer: D) -> Result<Option<Tz>, D::Error>
 where
@@ -70,6 +71,8 @@ pub struct ClockConfig {
     pub timezone: Option<Tz>,
     #[serde(default)]
     pub widgets: Vec<ClockWidgetConfig>,
+    #[serde(default = "default_widget_themes")]
+    pub widget_themes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
@@ -150,6 +153,7 @@ impl Default for ClockConfig {
             show_millis: default_false(),
             timezone: None,
             widgets: Vec::new(),
+            widget_themes: default_widget_themes(),
         }
     }
 }
@@ -198,6 +202,13 @@ fn default_widget_refresh_secs() -> u64 {
 
 fn default_widget_timeout_secs() -> u64 {
     DEFAULT_WIDGET_TIMEOUT_SECS
+}
+
+fn default_widget_themes() -> Vec<String> {
+    DEFAULT_WIDGET_THEMES
+        .iter()
+        .map(|theme| (*theme).to_string())
+        .collect()
 }
 
 impl Config {
@@ -264,6 +275,21 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.clock.widgets[0].position, WidgetPosition::Bottom);
+    }
+
+    #[test]
+    fn clock_widget_themes_default_and_parse() {
+        let default_config: Config = toml::from_str("[clock]").unwrap();
+        assert_eq!(default_config.clock.widget_themes, vec!["default", "nerv"]);
+
+        let custom_config: Config = toml::from_str(
+            r#"
+            [clock]
+            widget_themes = ["light", "dark"]
+            "#,
+        )
+        .unwrap();
+        assert_eq!(custom_config.clock.widget_themes, vec!["light", "dark"]);
     }
 
     #[test]

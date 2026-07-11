@@ -161,7 +161,7 @@ The clock automatically sizes itself into the top area when widgets are configur
 
 Widgets with `position = "bottom"` are placed in a full-width band beneath the widget row instead, stacked in config order and each sized to exactly fit its output. The widget row keeps a minimum height when both are present, and a bottom widget that cannot get at least 3 rows is hidden rather than squeezed. Bottom widgets don't count against the per-row widget limits, so a status strip can coexist with a full row of columns.
 
-When a widget has more output than fits on screen, scroll it with the mouse wheel over that widget. `Home` and `End` jump the active widget to the top or bottom.
+When a widget has more output than fits on screen, scroll it with the mouse wheel over that widget. `Home` and `End` jump the active widget to the top or bottom. In clock mode, press `Shift+T` to cycle the configured widget theme; lowercase `t` still switches to Timer mode.
 
 Each widget supports:
 
@@ -171,13 +171,22 @@ Each widget supports:
 - `timeout_secs`: command timeout, default `30`
 - `position`: `"auto"` (default, widget row) or `"bottom"` (full-width band below the row, sized to content)
 
+The app injects the current widget theme into every widget subprocess as `TCLOCK_WIDGET_THEME`. Theme names are a contract between your config and the widget commands: a command must understand the name it receives. The default cycle matches the bundled system-health widget (`default`, then `nerv`) and can be customized under `[clock]` for your own themed widgets:
+
+```toml
+[clock]
+widget_themes = ["default", "nerv"]
+```
+
+An empty or single-item list makes `Shift+T` harmless. For the bundled `tclock-system-health`, keep `default`/`nerv` unless you also add that theme to the script.
+
 ### Bundled example: system-health widget
 
 The repo ships a ready-to-use widget at [`examples/widgets/tclock-system-health`](./examples/widgets/tclock-system-health). The AUR package installs it as `/usr/bin/tclock-system-health`; release tarballs include it beside `tclock`, so manual installs can extract it to `~/.local/bin` or copy it to `/usr/local/bin`. It renders a two-column health dashboard with a one-line verdict header: backup/cleanup timer freshness, timeshift snapshots, live system/jobs/storage state, and a full-width btrfs row (scrub age per filesystem, fstrim age, allocation pressure, device I/O error counters) — all without root.
 
 Run it with no arguments and it auto-detects common setups (backup-looking user timers with staleness derived from each timer's own period, timeshift via grub-btrfs, btrfs rows only when btrfs is mounted, removable media excluded). Host-specific tuning is plain flags — see `tclock-system-health --help`. The intended pattern is a tiny wrapper script on your PATH holding your host's flags, referenced from the widget config:
 
-The widget supports named color themes, including the original `default` theme and an Evangelion/NERV-inspired `nerv` theme. See [System-health widget themes](./docs/widget-themes.md) for usage and contributor notes. Packaged installs also include this guide as `/usr/share/doc/clock-tui/widget-themes.md`.
+The widget supports named color themes, including the original `default` theme and an Evangelion/NERV-inspired `nerv` theme. It honors `TCLOCK_WIDGET_THEME`, so it works with `Shift+T` without a wrapper; an explicit `--theme` or `TCLOCK_SYSTEM_HEALTH_THEME` still wins. See [System-health widget themes](./docs/widget-themes.md) for usage and contributor notes. Packaged installs also include this guide as `/usr/share/doc/clock-tui/widget-themes.md`.
 
 ```toml
 [[clock.widgets]]

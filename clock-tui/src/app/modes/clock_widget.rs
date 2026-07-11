@@ -49,6 +49,7 @@ const MIN_WIDGET_ROW_HEIGHT: u16 = 8;
 // A bottom widget that can't get at least this many rows is hidden instead of
 // rendering an unusable sliver.
 const MIN_BOTTOM_WIDGET_HEIGHT: u16 = 3;
+const WIDGET_THEME_ENV: &str = "TCLOCK_WIDGET_THEME";
 
 pub(crate) struct ClockWidgets {
     widgets: Vec<ClockWidget>,
@@ -57,6 +58,8 @@ pub(crate) struct ClockWidgets {
     cancel: Arc<AtomicBool>,
     viewports: Vec<Rect>,
     active_widget: Option<usize>,
+    themes: Vec<String>,
+    theme_index: usize,
 }
 
 struct ClockWidget {
@@ -70,6 +73,7 @@ struct ClockWidget {
     visible: bool,
     scroll: u16,
     next_run: Instant,
+    rerun_requested: bool,
     handle: Option<JoinHandle<()>>,
 }
 
@@ -79,10 +83,11 @@ struct WidgetMessage {
 }
 
 impl ClockWidgets {
-    pub(crate) fn new(configs: Vec<ClockWidgetConfig>) -> Self {
+    pub(crate) fn new(configs: Vec<ClockWidgetConfig>, themes: Vec<String>) -> Self {
         let (tx, rx) = mpsc::channel();
         let now = Instant::now();
         let cancel = Arc::new(AtomicBool::new(false));
+        let themes = normalize_themes(themes);
         let widgets = configs
             .into_iter()
             .map(|config| ClockWidget {
@@ -96,6 +101,7 @@ impl ClockWidgets {
                 visible: false,
                 scroll: 0,
                 next_run: now,
+                rerun_requested: false,
                 handle: None,
             })
             .collect();
@@ -107,6 +113,8 @@ impl ClockWidgets {
             cancel,
             viewports: Vec::new(),
             active_widget: None,
+            themes,
+            theme_index: 0,
         }
     }
 
@@ -120,10 +128,17 @@ impl ClockWidgets {
 
         while let Ok(message) = self.rx.try_recv() {
             if let Some(widget) = self.widgets.get_mut(message.index) {
-                widget.output = message.output;
+                if !widget.rerun_requested {
+                    widget.output = message.output;
+                }
                 widget.clamp_scroll_to_output();
                 widget.running = false;
-                widget.next_run = now + widget.refresh;
+                widget.next_run = if widget.rerun_requested {
+                    widget.rerun_requested = false;
+                    now
+                } else {
+                    now + widget.refresh
+                };
                 if let Some(handle) = widget.handle.take() {
                     finished_handles.push(handle);
                 }
@@ -134,6 +149,7 @@ impl ClockWidgets {
             let _ = handle.join();
         }
 
+        let theme = self.current_theme().to_string();
         for (index, widget) in self.widgets.iter_mut().enumerate() {
             if !widget.visible || widget.running || now < widget.next_run {
                 continue;
@@ -142,14 +158,47 @@ impl ClockWidgets {
             widget.running = true;
             let command = widget.command.clone();
             let timeout = widget.timeout;
+            let theme = theme.clone();
             let tx = self.tx.clone();
             let cancel = self.cancel.clone();
 
             widget.handle = Some(thread::spawn(move || {
-                let output = run_command(command, timeout, cancel);
+                let output = run_command(command, timeout, cancel, theme);
                 let _ = tx.send(WidgetMessage { index, output });
             }));
         }
+    }
+
+    pub(crate) fn cycle_theme(&mut self) {
+        if self.themes.len() <= 1 {
+            return;
+        }
+
+        self.theme_index = (self.theme_index + 1) % self.themes.len();
+        let now = Instant::now();
+        for widget in &mut self.widgets {
+            if widget.visible {
+                widget.output = "Loading...".to_string();
+                widget.scroll = 0;
+            }
+            if widget.running {
+                widget.rerun_requested = true;
+            } else {
+                widget.next_run = now;
+            }
+        }
+    }
+
+    fn current_theme(&self) -> &str {
+        self.themes
+            .get(self.theme_index)
+            .map(String::as_str)
+            .unwrap_or("default")
+    }
+
+    #[cfg(test)]
+    pub(crate) fn current_theme_for_test(&self) -> &str {
+        self.current_theme()
     }
 
     pub(crate) fn render(
@@ -383,7 +432,20 @@ fn duration_or_default(secs: u64, default: Duration) -> Duration {
     }
 }
 
-fn run_command(command: Vec<String>, timeout: Duration, cancel: Arc<AtomicBool>) -> String {
+fn normalize_themes(themes: Vec<String>) -> Vec<String> {
+    themes
+        .into_iter()
+        .map(|theme| theme.trim().to_string())
+        .filter(|theme| !theme.is_empty())
+        .collect()
+}
+
+fn run_command(
+    command: Vec<String>,
+    timeout: Duration,
+    cancel: Arc<AtomicBool>,
+    theme: String,
+) -> String {
     if command.is_empty() {
         return "[error] missing command".to_string();
     }
@@ -391,6 +453,7 @@ fn run_command(command: Vec<String>, timeout: Duration, cancel: Arc<AtomicBool>)
     let mut child_command = Command::new(&command[0]);
     child_command
         .args(&command[1..])
+        .env(WIDGET_THEME_ENV, theme)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -828,29 +891,32 @@ mod tests {
 
     #[test]
     fn widget_title_distinguishes_empty_omitted_and_missing() {
-        let widgets = ClockWidgets::new(vec![
-            ClockWidgetConfig {
-                title: Some(String::new()),
-                command: vec!["self-header".to_string()],
-                refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
-                timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
-                position: WidgetPosition::Auto,
-            },
-            ClockWidgetConfig {
-                title: None,
-                command: vec!["fallback-command".to_string()],
-                refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
-                timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
-                position: WidgetPosition::Auto,
-            },
-            ClockWidgetConfig {
-                title: None,
-                command: Vec::new(),
-                refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
-                timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
-                position: WidgetPosition::Auto,
-            },
-        ]);
+        let widgets = ClockWidgets::new(
+            vec![
+                ClockWidgetConfig {
+                    title: Some(String::new()),
+                    command: vec!["self-header".to_string()],
+                    refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
+                    timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
+                    position: WidgetPosition::Auto,
+                },
+                ClockWidgetConfig {
+                    title: None,
+                    command: vec!["fallback-command".to_string()],
+                    refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
+                    timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
+                    position: WidgetPosition::Auto,
+                },
+                ClockWidgetConfig {
+                    title: None,
+                    command: Vec::new(),
+                    refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
+                    timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
+                    position: WidgetPosition::Auto,
+                },
+            ],
+            default_themes(),
+        );
 
         assert_eq!(widgets.widgets[0].title(), "");
         assert_eq!(widgets.widgets[1].title(), "fallback-command");
@@ -859,11 +925,14 @@ mod tests {
 
     #[test]
     fn bottom_widget_renders_full_width_under_the_row() {
-        let mut widgets = ClockWidgets::new(vec![
-            widget_config("one"),
-            widget_config("two"),
-            bottom_widget_config("health"),
-        ]);
+        let mut widgets = ClockWidgets::new(
+            vec![
+                widget_config("one"),
+                widget_config("two"),
+                bottom_widget_config("health"),
+            ],
+            default_themes(),
+        );
         widgets.widgets[2].output = numbered_lines(4);
         let area = Rect::new(0, 2, 80, 38);
         let terminal_area = Rect::new(0, 0, 80, 40);
@@ -895,7 +964,7 @@ mod tests {
             .map(|index| widget_config(&format!("row-{index}")))
             .collect::<Vec<_>>();
         configs.push(bottom_widget_config("health"));
-        let mut widgets = ClockWidgets::new(configs);
+        let mut widgets = ClockWidgets::new(configs, default_themes());
         widgets.widgets[ULTRAWIDE_TERMINAL_WIDGETS].output = "ok".to_string();
         let area = Rect::new(0, 0, 240, 50);
         let mut buffer = Buffer::empty(area);
@@ -914,7 +983,7 @@ mod tests {
 
     #[test]
     fn bottom_widget_alone_takes_band_without_row() {
-        let mut widgets = ClockWidgets::new(vec![bottom_widget_config("health")]);
+        let mut widgets = ClockWidgets::new(vec![bottom_widget_config("health")], default_themes());
         widgets.widgets[0].output = numbered_lines(3);
         let area = Rect::new(0, 0, 60, 30);
         let mut buffer = Buffer::empty(Rect::new(0, 0, 60, 30));
@@ -929,8 +998,10 @@ mod tests {
 
     #[test]
     fn bottom_widget_is_capped_by_min_row_height() {
-        let mut widgets =
-            ClockWidgets::new(vec![widget_config("one"), bottom_widget_config("health")]);
+        let mut widgets = ClockWidgets::new(
+            vec![widget_config("one"), bottom_widget_config("health")],
+            default_themes(),
+        );
         widgets.widgets[1].output = numbered_lines(100);
         let area = Rect::new(0, 0, 80, 20);
         let mut buffer = Buffer::empty(Rect::new(0, 0, 80, 20));
@@ -946,8 +1017,10 @@ mod tests {
 
     #[test]
     fn hidden_bottom_widget_does_not_run_or_hit_test() {
-        let mut widgets =
-            ClockWidgets::new(vec![widget_config("one"), bottom_widget_config("health")]);
+        let mut widgets = ClockWidgets::new(
+            vec![widget_config("one"), bottom_widget_config("health")],
+            default_themes(),
+        );
         widgets.widgets[1].output = numbered_lines(5);
         // area too small to grant the bottom widget its minimum height
         let area = Rect::new(0, 0, 40, 9);
@@ -962,7 +1035,10 @@ mod tests {
 
     #[test]
     fn widget_hit_testing_uses_last_rendered_viewports() {
-        let mut widgets = ClockWidgets::new(vec![widget_config("one"), widget_config("two")]);
+        let mut widgets = ClockWidgets::new(
+            vec![widget_config("one"), widget_config("two")],
+            default_themes(),
+        );
         let mut buffer = Buffer::empty(Rect::new(0, 0, 40, 10));
 
         widgets.render(
@@ -980,7 +1056,10 @@ mod tests {
 
     #[test]
     fn widget_scroll_clamps_and_home_end_target_active_widget() {
-        let mut widgets = ClockWidgets::new(vec![widget_config("one"), widget_config("two")]);
+        let mut widgets = ClockWidgets::new(
+            vec![widget_config("one"), widget_config("two")],
+            default_themes(),
+        );
         widgets.widgets[0].output = numbered_lines(20);
         widgets.widgets[1].output = numbered_lines(20);
         let mut buffer = Buffer::empty(Rect::new(0, 0, 40, 8));
@@ -1041,6 +1120,57 @@ mod tests {
             timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
             position: WidgetPosition::Auto,
         }
+    }
+
+    fn default_themes() -> Vec<String> {
+        vec!["default".to_string(), "nerv".to_string()]
+    }
+
+    #[test]
+    fn command_receives_current_widget_theme_env() {
+        let output = run_command(
+            vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "printf %s \"$TCLOCK_WIDGET_THEME\"".to_string(),
+            ],
+            DEFAULT_TIMEOUT,
+            Arc::new(AtomicBool::new(false)),
+            "nerv".to_string(),
+        );
+
+        assert_eq!(output, "nerv");
+    }
+
+    #[test]
+    fn cycling_theme_refreshes_visible_widgets_and_ignores_single_theme() {
+        let mut widgets = ClockWidgets::new(
+            vec![widget_config("one"), widget_config("hidden")],
+            default_themes(),
+        );
+        let area = Rect::new(0, 0, 40, 8);
+        let mut buffer = Buffer::empty(area);
+        widgets.render(area, area, &mut buffer, Style::default());
+        widgets.widgets[0].output = "old".to_string();
+        widgets.widgets[0].next_run = Instant::now() + Duration::from_secs(60);
+        widgets.widgets[1].visible = false;
+        widgets.widgets[1].output = "old hidden".to_string();
+        widgets.widgets[1].next_run = Instant::now() + Duration::from_secs(60);
+
+        widgets.cycle_theme();
+
+        assert_eq!(widgets.current_theme(), "nerv");
+        assert_eq!(widgets.widgets[0].output, "Loading...");
+        assert!(widgets.widgets[0].next_run <= Instant::now());
+        assert_eq!(widgets.widgets[1].output, "old hidden");
+        assert!(widgets.widgets[1].next_run <= Instant::now());
+
+        let mut single = ClockWidgets::new(vec![widget_config("one")], vec!["only".to_string()]);
+        single.render(area, area, &mut buffer, Style::default());
+        single.widgets[0].output = "old".to_string();
+        single.cycle_theme();
+        assert_eq!(single.current_theme(), "only");
+        assert_eq!(single.widgets[0].output, "old");
     }
 
     fn bottom_widget_config(title: &str) -> ClockWidgetConfig {

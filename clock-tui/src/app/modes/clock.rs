@@ -32,6 +32,7 @@ impl Clock {
         show_secs: bool,
         timezone: Option<Tz>,
         widgets: Vec<ClockWidgetConfig>,
+        widget_themes: Vec<String>,
     ) -> Self {
         Self {
             size,
@@ -40,7 +41,7 @@ impl Clock {
             show_millis,
             show_secs,
             timezone,
-            widgets: ClockWidgets::new(widgets),
+            widgets: ClockWidgets::new(widgets, widget_themes),
         }
     }
 
@@ -58,6 +59,15 @@ impl Clock {
 
     pub(crate) fn scroll_active_widget_to_bottom(&mut self) {
         self.widgets.scroll_active_to_bottom();
+    }
+
+    pub(crate) fn cycle_widget_theme(&mut self) {
+        self.widgets.cycle_theme();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn current_widget_theme_for_test(&self) -> &str {
+        self.widgets.current_theme_for_test()
     }
 
     pub(crate) fn render(&mut self, area: Rect, buf: &mut Buffer) {
