@@ -165,7 +165,7 @@ When a widget has more output than fits on screen, scroll it with the mouse whee
 
 Each widget supports:
 
-- `title`: optional display title
+- `title`: optional display title; omit it to fall back to the command name, or set it to an empty string (`title = ""`) to suppress the title line entirely so the command output owns the whole widget (useful for self-rendered headers)
 - `command`: executable string, or array form with arguments
 - `refresh_secs`: refresh interval, default `900`
 - `timeout_secs`: command timeout, default `30`

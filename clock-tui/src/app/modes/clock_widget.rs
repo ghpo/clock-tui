@@ -537,18 +537,24 @@ fn normalize_output(output: &str) -> String {
 }
 
 fn widget_text(title: &str, output: &str, base_style: Style) -> Text<'static> {
-    let title_style = base_style
-        .fg(Color::Gray)
-        .add_modifier(Modifier::BOLD)
-        .remove_modifier(Modifier::DIM);
-    let marker_style = base_style
-        .fg(Color::Cyan)
-        .add_modifier(Modifier::BOLD)
-        .remove_modifier(Modifier::DIM);
-    let mut lines = vec![Line::from(vec![
-        Span::styled("● ".to_string(), marker_style),
-        Span::styled(title.to_string(), title_style),
-    ])];
+    // An explicitly empty title (`title = ""`) suppresses the title line so the
+    // command output fully owns the widget area (e.g. self-rendered headers).
+    let mut lines = if title.is_empty() {
+        Vec::new()
+    } else {
+        let title_style = base_style
+            .fg(Color::Gray)
+            .add_modifier(Modifier::BOLD)
+            .remove_modifier(Modifier::DIM);
+        let marker_style = base_style
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+            .remove_modifier(Modifier::DIM);
+        vec![Line::from(vec![
+            Span::styled("● ".to_string(), marker_style),
+            Span::styled(title.to_string(), title_style),
+        ])]
+    };
 
     lines.extend(ansi_lines(output, base_style));
     Text::from(lines)
@@ -807,6 +813,48 @@ mod tests {
         assert_eq!(visible_widget_count(area, 0), 0);
         assert_eq!(visible_widget_count(area, 3), 3);
         assert_eq!(visible_widget_count(area, 10), 6);
+    }
+
+    #[test]
+    fn empty_title_suppresses_title_line() {
+        let untitled = widget_text("", "hello\nworld", Style::default());
+        assert_eq!(untitled.lines.len(), 2);
+
+        let titled = widget_text("Health", "hello\nworld", Style::default());
+        assert_eq!(titled.lines.len(), 3);
+
+        assert_eq!(widget_text_height("", "one\ntwo", 80), 2);
+    }
+
+    #[test]
+    fn widget_title_distinguishes_empty_omitted_and_missing() {
+        let widgets = ClockWidgets::new(vec![
+            ClockWidgetConfig {
+                title: Some(String::new()),
+                command: vec!["self-header".to_string()],
+                refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
+                timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
+                position: WidgetPosition::Auto,
+            },
+            ClockWidgetConfig {
+                title: None,
+                command: vec!["fallback-command".to_string()],
+                refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
+                timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
+                position: WidgetPosition::Auto,
+            },
+            ClockWidgetConfig {
+                title: None,
+                command: Vec::new(),
+                refresh_secs: DEFAULT_WIDGET_REFRESH_SECS,
+                timeout_secs: DEFAULT_WIDGET_TIMEOUT_SECS,
+                position: WidgetPosition::Auto,
+            },
+        ]);
+
+        assert_eq!(widgets.widgets[0].title(), "");
+        assert_eq!(widgets.widgets[1].title(), "fallback-command");
+        assert_eq!(widgets.widgets[2].title(), "widget");
     }
 
     #[test]
